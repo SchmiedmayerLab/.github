@@ -10,7 +10,7 @@ SPDX-License-Identifier: MIT
 
 ### Schmiedmayer Lab
 
-Welcome to the Schmiedmayer Lab GitHub organization, where we build open-source software for computational medicine.
+Welcome to the Schmiedmayer Lab GitHub organization!
 
 
 ![Stanford and Stanford Medicine logos](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/stanford-footer-light.png#gh-light-mode-only)
