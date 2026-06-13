@@ -12,20 +12,303 @@ SPDX-License-Identifier: MIT
 
 This repository provides default community health files, reusable GitHub Actions workflows, templates, and shared documentation for the Schmiedmayer Lab organization.
 
-
 ## GitHub Actions
 
-This repository contains reusable GitHub Actions workflows that automate common tasks across Schmiedmayer Lab projects.
+This repository publishes reusable GitHub Actions workflows for common Schmiedmayer Lab project tasks.
+Use them from another repository with `jobs.<job_id>.uses` and a version tag.
+Until the first stable release, examples use the `v0.1` tag.
 
+The workflows below are public entry points.
+The repository-local [`validate.yml`](.github/workflows/validate.yml) and [`release.yml`](.github/workflows/release.yml) workflows are used to maintain this repository and are not intended to be called from other projects.
 
-### Build and Test with xcodebuild or fastlane
+### Workflow Catalog
 
-Allows GitHub Actions to build complex Swift packages supporting Apple platforms as well as Xcode projects with requirements ranging from custom commands and xcodebuild to Fastlane.
-You can learn more about the arguments in the [`xcodebuild-fastlane.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/xcodebuild-fastlane.yml).
+#### Repository Checks
+
+| Workflow | Use |
+|---|---|
+| [`actionlint.yml`](#lint-github-actions-workflows) | Lint GitHub Actions workflow files with actionlint. |
+| [`eslint.yml`](#run-eslint) | Run ESLint for JavaScript and TypeScript projects. |
+| [`markdown-links.yml`](#check-markdown-links) | Check Markdown links. |
+| [`periphery.yml`](#run-periphery) | Run Periphery to detect unused Swift declarations. |
+| [`reuse.yml`](#check-reuse-compliance) | Check REUSE license and copyright metadata. |
+| [`swiftlint.yml`](#run-swiftlint) | Run SwiftLint for Swift style and quality checks. |
+
+#### Swift and Apple Platforms
+
+| Workflow | Use |
+|---|---|
+| [`coverage.yml`](#merge-and-upload-coverage) | Merge coverage artifacts and upload the result to Codecov. |
+| [`docc-github-pages.yml`](#deploy-docc-documentation) | Build DocC documentation and deploy it to GitHub Pages. |
+| [`swift-api-breaking-changes.yml`](#diagnose-swift-api-breaking-changes) | Diagnose Swift API breaking changes with package metadata detection. |
+| [`swift-package-breaking-changes.yml`](#diagnose-swift-package-api-breaking-changes) | Diagnose Swift package API breaking changes with explicit product and platform inputs. |
+| [`swift-package-ci.yml`](#swift-package-ci) | Run the standard Swift Package CI pipeline. |
+| [`swift-package-setup.yml`](#set-up-swift-package) | Parse Swift package metadata for downstream workflows. |
+| [`swift-package-static-analysis.yml`](#analyze-swift-package) | Run the standard static analysis checks for Swift packages. |
+| [`swift-package-test.yml`](#test-swift-package) | Test a Swift package across the configured Apple and Linux matrices. |
+| [`swift-test.yml`](#run-swift-tests) | Run SwiftPM tests and optionally export LCOV coverage. |
+| [`xcodebuild-fastlane.yml`](#build-and-test-with-xcodebuild-or-fastlane) | Build and test Apple projects with xcodebuild, fastlane, or a custom command. |
+| [`xcarchive.yml`](#build-xcarchive) | Build an XCArchive and upload it as an artifact. |
+| [`xcframework.yml`](#build-xcframework) | Build an XCFramework from XCArchive artifacts. |
+| [`xcframework-release.yml`](#release-xcframework) | Commit and release an XCFramework artifact. |
+
+#### Web, Node.js, and Firebase
+
+| Workflow | Use |
+|---|---|
+| [`firebase-deploy.yml`](#deploy-firebase) | Deploy Firebase projects. |
+| [`nextjs-github-pages.yml`](#deploy-nextjs-site) | Build and deploy a static Next.js site to GitHub Pages. |
+| [`npm-publish.yml`](#publish-npm-package) | Publish an npm package. |
+| [`npm-test-coverage.yml`](#test-npm-package-and-upload-coverage) | Test an npm package and upload coverage to Codecov. |
+
+#### Containers
+
+| Workflow | Use |
+|---|---|
+| [`docker-build-and-push.yml`](#build-and-push-docker-image) | Build and publish multi-architecture Docker images. |
+| [`docker-compose-test.yml`](#test-docker-compose-stack) | Test a Docker Compose stack. |
+
+#### Releases
+
+| Workflow | Use |
+|---|---|
+| [`action-release-tag.yml`](#tag-action-release) | Maintain major and minor release tags for GitHub Actions repositories. |
+| [`format-release-notes.yml`](#format-release-notes) | Format GitHub release notes. |
+
+### Workflow Reference
+
+#### Repository Checks
+
+##### Lint GitHub Actions Workflows
+
+[`actionlint.yml`](.github/workflows/actionlint.yml) installs actionlint and checks GitHub Actions workflow syntax.
+Use it for repositories that maintain their own workflows.
 
 ```yml
 jobs:
-  buildandtest:
+  actionlint:
+    name: Lint GitHub Actions Workflows
+    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.1
+    with:
+      runs_on_labels: '["ubuntu-latest"]'
+```
+
+##### Run ESLint
+
+[`eslint.yml`](.github/workflows/eslint.yml) installs Node.js dependencies, runs the repository lint command, annotates pull requests, and uploads the ESLint report.
+Use it for JavaScript and TypeScript projects with `npm run lint:ci`.
+
+```yml
+jobs:
+  eslint:
+    name: Run ESLint
+    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.1
+```
+
+##### Check Markdown Links
+
+[`markdown-links.yml`](.github/workflows/markdown-links.yml) checks Markdown links with Linkspector.
+Use it for documentation-heavy repositories.
+
+```yml
+jobs:
+  markdown-links:
+    name: Check Markdown Links
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.1
+    with:
+      runs_on_labels: '["ubuntu-latest"]'
+```
+
+##### Run Periphery
+
+[`periphery.yml`](.github/workflows/periphery.yml) runs Periphery to detect unused Swift declarations.
+Use it for Swift packages and Xcode projects that can be scanned from the repository root.
+
+```yml
+jobs:
+  periphery:
+    name: Run Periphery
+    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.1
+```
+
+##### Check REUSE Compliance
+
+[`reuse.yml`](.github/workflows/reuse.yml) checks that files carry REUSE-compliant license and copyright metadata.
+Use it for repositories that follow the REUSE specification.
+
+```yml
+jobs:
+  reuse:
+    name: Check REUSE Compliance
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.1
+```
+
+##### Run SwiftLint
+
+[`swiftlint.yml`](.github/workflows/swiftlint.yml) runs SwiftLint in strict mode.
+Use it for Swift repositories that define SwiftLint rules.
+
+```yml
+jobs:
+  swiftlint:
+    name: Run SwiftLint
+    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.1
+```
+
+#### Swift and Apple Platforms
+
+##### Merge and Upload Coverage
+
+[`coverage.yml`](.github/workflows/coverage.yml) downloads coverage artifacts, merges `.xcresult` and `.lcov` reports, and uploads the result to Codecov.
+Use it after test jobs that upload coverage artifacts.
+
+```yml
+jobs:
+  coverage:
+    name: Merge and Upload Coverage
+    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.1
+    with:
+      coveragereports: ResultBundle1.xcresult ResultBundle2.xcresult
+    secrets:
+      token: ${{ secrets.CODECOV_TOKEN }}
+```
+
+##### Deploy DocC Documentation
+
+[`docc-github-pages.yml`](.github/workflows/docc-github-pages.yml) builds DocC documentation with xcodebuild and deploys the generated site to GitHub Pages.
+Use it for Swift packages and Xcode projects that publish API documentation.
+
+```yml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  docc:
+    name: Deploy DocC Documentation
+    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.1
+    with:
+      scheme: ExamplePackage
+```
+
+##### Diagnose Swift API Breaking Changes
+
+[`swift-api-breaking-changes.yml`](.github/workflows/swift-api-breaking-changes.yml) detects library products and platform metadata before running Swift API breakage diagnostics.
+Use it for Swift packages that can rely on automatic metadata detection.
+
+```yml
+jobs:
+  api-breaking-changes:
+    name: Diagnose Swift API Breaking Changes
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.1
+```
+
+##### Diagnose Swift Package API Breaking Changes
+
+[`swift-package-breaking-changes.yml`](.github/workflows/swift-package-breaking-changes.yml) runs Swift API breakage diagnostics with explicit library product and platform inputs.
+Use it when another workflow already knows the package metadata.
+
+```yml
+jobs:
+  package-breaking-changes:
+    name: Diagnose Swift Package API Breaking Changes
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.1
+    with:
+      library_products: '["ExamplePackage"]'
+      platform_name: ios
+      platform_version: '18.0'
+```
+
+##### Swift Package CI
+
+Use [`swift-package-ci.yml`](.github/workflows/swift-package-ci.yml) as the default entry point for Swift packages.
+It detects package metadata, runs tests, uploads coverage when available, and runs static analysis.
+
+```yml
+jobs:
+  swift-package-ci:
+    name: Swift Package CI
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.1
+    secrets: inherit
+```
+
+##### Set Up Swift Package
+
+[`swift-package-setup.yml`](.github/workflows/swift-package-setup.yml) parses Swift package metadata and exposes it as workflow outputs.
+Use it as a setup job before lower-level Swift package workflows.
+
+```yml
+jobs:
+  setup:
+    name: Set Up Swift Package
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.1
+  test:
+    name: Test Swift Package
+    needs: setup
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.1
+    with:
+      package_name: ${{ needs.setup.outputs.package_name }}
+      scheme: ${{ needs.setup.outputs.scheme }}
+      platform_matrix: ${{ needs.setup.outputs.platform_matrix }}
+      ui_platform_matrix: ${{ needs.setup.outputs.ui_platform_matrix }}
+```
+
+##### Analyze Swift Package
+
+[`swift-package-static-analysis.yml`](.github/workflows/swift-package-static-analysis.yml) combines REUSE, SwiftLint, Markdown link checking, and Swift API breakage diagnostics.
+Use it when package metadata is already available from `swift-package-setup.yml`.
+
+```yml
+jobs:
+  analyze:
+    name: Analyze Swift Package
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.1
+    with:
+      library_products: '["ExamplePackage"]'
+      platform_name: ios
+      platform_version: '18.0'
+```
+
+##### Test Swift Package
+
+[`swift-package-test.yml`](.github/workflows/swift-package-test.yml) runs Apple platform test matrices, optional UI test matrices, optional Linux tests, and coverage upload.
+Use it when package metadata and platform matrices are provided explicitly.
+
+```yml
+jobs:
+  test:
+    name: Test Swift Package
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.1
+    with:
+      package_name: ExamplePackage
+      scheme: ExamplePackage
+      platform_matrix: >-
+        [{"name":"iOS","destination":"platform=iOS Simulator,name=iPhone 17 Pro"}]
+      ui_platform_matrix: '[]'
+    secrets:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+```
+
+##### Run Swift Tests
+
+[`swift-test.yml`](.github/workflows/swift-test.yml) runs SwiftPM tests and can upload an LCOV artifact for later coverage merging.
+Use it for Linux Swift package tests or simple SwiftPM test jobs.
+
+```yml
+jobs:
+  swift-test:
+    name: Run Swift Tests
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.1
+```
+
+##### Build and Test with xcodebuild or fastlane
+
+Use [`xcodebuild-fastlane.yml`](.github/workflows/xcodebuild-fastlane.yml) for Apple projects that need a direct xcodebuild, fastlane, or custom command setup.
+
+```yml
+jobs:
+  build-and-test:
     name: Build and Test Swift Package
     uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-fastlane.yml@v0.1
     with:
@@ -34,50 +317,168 @@ jobs:
       scheme: TemplatePackage
 ```
 
-### Merge and Upload Coverage
+##### Build XCArchive
 
-Merge and upload code coverage reports to display them on codecov.io.
-You can learn more about the arguments in the [`coverage.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/coverage.yml).
+[`xcarchive.yml`](.github/workflows/xcarchive.yml) builds an XCArchive and uploads it as an artifact.
+Use it for binary distribution pipelines that package Apple platform archives.
 
 ```yml
 jobs:
-  uploadcoveragereport:
-    name: Merge and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.1
+  xcarchive:
+    name: Build XCArchive
+    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.1
     with:
-      coveragereports: ResultBundle1.xcresult ResultBundle2.xcresult
+      workspaceFile: example.xcworkspace
+      xcArchiveName: ExampleKit
+      scheme: ExampleKit
+      version: 0.1.0
 ```
 
-### Check REUSE Compliance
+##### Build XCFramework
 
-Check that all your source files conform to the REUSE specification.
-You can learn more about the arguments in the [`reuse.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/reuse.yml).
+Use [`xcframework.yml`](.github/workflows/xcframework.yml) to package XCArchive outputs into an XCFramework artifact.
 
 ```yml
 jobs:
-  reuse_action:
-    name: Check REUSE Compliance
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.1
+  xcframework:
+    name: Build XCFramework
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.1
+    with:
+      workspaceFile: example.xcworkspace
+      xcFrameworkName: ExampleKit
+      scheme: ExampleKit
+      version: 0.1.0
 ```
 
-### Run SwiftLint
+##### Release XCFramework
 
-Ensure that all Swift files conform to the defined style guide.
-You can learn more about the arguments in the [`swiftlint.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/swiftlint.yml).
+[`xcframework-release.yml`](.github/workflows/xcframework-release.yml) downloads built XCFramework artifacts, commits them to the repository, tags the release, and creates a GitHub release.
+Use it after `xcframework.yml` has produced the XCFramework artifact.
 
 ```yml
-  swiftlint:
-    name: Run SwiftLint
-    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.1
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  release-xcframework:
+    name: Release XCFramework
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.1
+    with:
+      version: v0.1.0
+    secrets:
+      access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
 
-### Tag Action Release
+#### Web, Node.js, and Firebase
 
-A small GitHub Actions workflow that automatically tags releases based on semantic version tags, which is useful for GitHub Actions repositories. For example, if you tag a release as v2.4.2, the workflow also tags v2 and v2.4. You can learn more about the arguments in the [`action-release-tag.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/action-release-tag.yml).
+##### Deploy Firebase
+
+[`firebase-deploy.yml`](.github/workflows/firebase-deploy.yml) installs Firebase tooling and deploys a Firebase project with service-account credentials.
+Use it for Firebase Hosting, Functions, Firestore rules, or other Firebase deploy targets.
 
 ```yml
 jobs:
-  releasetag:
+  firebase:
+    name: Deploy Firebase
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.1
+    with:
+      arguments: --only hosting
+    secrets:
+      GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+```
+
+##### Deploy Next.js Site
+
+Use [`nextjs-github-pages.yml`](.github/workflows/nextjs-github-pages.yml) for static Next.js sites that publish to GitHub Pages.
+
+```yml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  pages:
+    name: Deploy Next.js Site
+    uses: SchmiedmayerLab/.github/.github/workflows/nextjs-github-pages.yml@v0.1
+```
+
+##### Publish npm Package
+
+[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, builds the package, and publishes it to npm.
+Use it from release workflows that have an npm token available.
+
+```yml
+jobs:
+  npm-publish:
+    name: Publish npm Package
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.1
+    with:
+      packageVersion: 0.1.0
+    secrets:
+      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+```
+
+##### Test npm Package and Upload Coverage
+
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload.
+
+```yml
+jobs:
+  npm-test:
+    name: Test npm Package and Upload Coverage
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.1
+    secrets:
+      token: ${{ secrets.CODECOV_TOKEN }}
+```
+
+#### Containers
+
+##### Build and Push Docker Image
+
+Use [`docker-build-and-push.yml`](.github/workflows/docker-build-and-push.yml) to publish a multi-architecture Docker image.
+
+```yml
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    name: Build and Push Docker Image
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.1
+    with:
+      imageName: schmiedmayerlab/example
+```
+
+##### Test Docker Compose Stack
+
+[`docker-compose-test.yml`](.github/workflows/docker-compose-test.yml) builds and starts a Docker Compose stack and can run an optional smoke-test script.
+Use it for projects where integration tests run against local services.
+
+```yml
+jobs:
+  docker-compose:
+    name: Test Docker Compose Stack
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.1
+    with:
+      testscript: scripts/smoke-test.sh
+```
+
+#### Releases
+
+##### Tag Action Release
+
+Use [`action-release-tag.yml`](.github/workflows/action-release-tag.yml) for GitHub Actions repositories that publish semantic version tags.
+For example, publishing `v2.4.2` can also update `v2` and `v2.4`.
+
+```yml
+permissions:
+  contents: write
+
+jobs:
+  release-tags:
     name: Tag Action Release
     uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.1
     secrets:
@@ -86,41 +487,20 @@ jobs:
       user: PaulsAutomationBot
 ```
 
-### Build XCArchive
+##### Format Release Notes
 
-A GitHub Actions workflow that builds an XCArchive based on an Xcode workspace file with a specific scheme. The resulting archive is uploaded and stored as an artifact.
-You can learn more about the arguments in the [`xcarchive.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/xcarchive.yml).
-
-```yml
-jobs:
-  build-xcarchive:
-    name: Build XCArchive
-    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.1
-    with:
-      workspaceFile: example.xcworkspace
-      xcArchiveName: exampleXCArchiveName
-      scheme: exampleScheme
-      version: 0.1.0
-```
-
-### Build XCFramework
-
-A GitHub Actions workflow that creates an XCFramework from an Xcode workspace file with a specific scheme. As an intermediate step, the workflow uses [`xcarchive.yml`](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/xcarchive.yml) to create the XCArchives that are packaged within the XCFramework. The resulting XCFramework is uploaded as an artifact.
-You can learn more about the arguments in the [`xcframework.yml` GitHub Actions workflow file](https://github.com/SchmiedmayerLab/.github/blob/main/.github/workflows/xcframework.yml).
+[`format-release-notes.yml`](.github/workflows/format-release-notes.yml) fetches a GitHub release and formats its release notes for downstream release automation.
+Use it when another job needs the formatted notes from the `releasenotes` output.
 
 ```yml
 jobs:
-  create-xcframework-workflow:
-    name: Build XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.1
+  release-notes:
+    name: Format Release Notes
+    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.1
     with:
-      workspaceFile: example.xcworkspace
-      xcFrameworkName: exampleXCFrameworkName
-      scheme: exampleScheme
-      version: 0.1.0
+      release-tag: ${{ github.ref_name }}
+      repository: ${{ github.repository }}
 ```
-
-
 
 ## Our Research
 
