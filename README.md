@@ -18,10 +18,6 @@ This repository provides default community health files, reusable GitHub Actions
 
 This repository publishes reusable GitHub Actions workflows for common Schmiedmayer Lab project tasks.
 Use them from another repository with `jobs.<job_id>.uses` and a version tag.
-Until the first stable release, examples use the `v0.1` tag.
-
-The workflows below are public entry points.
-The repository-local [`validate.yml`](.github/workflows/validate.yml) and [`release.yml`](.github/workflows/release.yml) workflows are used to maintain this repository and are not intended to be called from other projects.
 
 ### Workflow Catalog
 
