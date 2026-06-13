@@ -10,6 +10,8 @@ SPDX-License-Identifier: MIT
 
 # Schmiedmayer Lab
 
+[![Validate Repository](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml)
+
 This repository provides default community health files, reusable GitHub Actions workflows, templates, and shared documentation for the Schmiedmayer Lab organization.
 
 ## GitHub Actions
