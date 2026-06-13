@@ -1,0 +1,49 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+ignore:
+  - "Tests"
+  - "Example"
+
+codecov:
+  require_ci_to_pass: true
+  bot: PaulsAutomationBot
+  branch: main
+
+coverage:
+  range: "75...90"
+  precision: 2
+  round: up
+  status:
+    # The project status measures overall project coverage and compares it against the base of the pull request.
+    project:
+      default:
+        # Choose a minimum coverage ratio that the commit must meet to be considered a success.
+        target: auto
+        # Allow coverage to drop by X% while still posting a success status.
+        threshold: 0.5%
+    # The patch status only measures lines adjusted in the pull request.
+    patch:
+      default:
+        # Choose a minimum coverage ratio that the commit must meet to be considered a success.
+        target: auto
+        # Allow coverage to drop by X% while still posting a success status.
+        threshold: 0%
+
+parsers:
+  gcov:
+    branch_detection:
+      conditional: true
+      loop: true
+      method: false
+      macro: false
+
+comment:
+  layout: "reach,diff,flags,files,footer"
+  behavior: default
+  require_changes: false

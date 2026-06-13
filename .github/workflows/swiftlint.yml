@@ -1,0 +1,45 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Run SwiftLint
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: |
+          SwiftLint version.
+        type: string
+        default: latest
+        required: false
+      path:
+        description: |
+          The path where the project is located. Defaults to $GITHUB_WORKSPACE.
+        required: false
+        type: string
+        default: '.'
+
+permissions:
+  contents: read
+
+jobs:
+  swiftlint:
+    name: Run SwiftLint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Run SwiftLint
+        uses: stanfordbdhg/action-swiftlint@v4
+        with:
+          args: --strict
+          version: ${{ inputs.version }}

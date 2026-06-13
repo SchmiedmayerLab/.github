@@ -1,0 +1,104 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Release XCFramework
+
+on:
+  workflow_call:
+    inputs:
+      dryrun:
+        description: |
+          If true, the workflow will not commit and release the built XCFramework.
+        type: boolean
+        required: false
+        default: false
+      version:
+        description: |
+          Version tag to create for the XCFramework release.
+        type: string
+        required: true
+      outputpath:
+        description: |
+          Optional prefix for the output path.
+        type: string
+        required: false
+        default: '.'
+      user:
+        description: |
+          Optional GitHub username associated with the GitHub personal access token (PAT).
+        type: string
+        required: false
+        default: ''
+    secrets:
+      access-token:
+        description: |
+          GitHub personal access token (PAT).
+          Needed if the target branch is protected and requires a specific access token for pushing commits.
+        required: false
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  xcframework-commit-and-release:
+    name: Release XCFramework
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.access-token || github.token }}
+      - name: Download artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: ./.build
+          merge-multiple: true
+      - name: Extract XCFrameworks
+        env:
+          OUTPUT_PATH: ${{ inputs.outputpath }}
+        run: |
+          output_path="${OUTPUT_PATH:?outputpath must not be empty}"
+
+          if ! grep -qxF '.build' .gitignore; then
+            echo '.build' >> .gitignore
+          fi
+
+          mkdir -p "$output_path"
+
+          find ./.build -name "*.tar.gz" -exec tar -zxvf {} -C ./.build \;
+          while IFS= read -r -d '' xcframework; do
+            rm -rf "${output_path:?}/$(basename "$xcframework")"
+            mv "$xcframework" "$output_path"
+          done < <(find ./.build -name "*.xcframework" -print0)
+      - name: Dry run
+        if: ${{ inputs.dryrun }}
+        env:
+          OUTPUT_PATH: ${{ inputs.outputpath }}
+        run: |
+          output_path="${OUTPUT_PATH:?outputpath must not be empty}"
+          git add "$output_path"/*.xcframework
+          git status
+      - name: Commit and push XCFrameworks
+        if: ${{ !inputs.dryrun }}
+        uses: EndBug/add-and-commit@v10
+        with:
+          message: Create XCFrameworks for release ${{ inputs.version }}
+          tag: ${{ inputs.version }} --force
+          tag_push: --force
+          github_token: ${{ secrets.access-token || github.token }}
+          author_name: ${{ inputs.user || github.actor }}
+          author_email: ${{ inputs.user || github.actor }}@users.noreply.github.com
+      - name: Create Release
+        uses: softprops/action-gh-release@v3
+        if: ${{ !inputs.dryrun }}
+        with:
+          tag_name: ${{ inputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            ./.build/*.xcframework.tar.gz

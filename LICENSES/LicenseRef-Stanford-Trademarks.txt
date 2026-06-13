@@ -1,0 +1,4 @@
+The Stanford University and Stanford Medicine names, wordmarks, and logos are
+trademarks of Stanford University. Use of these marks is subject to Stanford
+University and Stanford Medicine brand and trademark guidelines and is not
+licensed under the MIT license for this repository.

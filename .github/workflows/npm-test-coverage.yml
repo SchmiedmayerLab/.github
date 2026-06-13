@@ -1,0 +1,102 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Test npm Package and Upload Coverage
+
+on:
+  workflow_call:
+    inputs:
+      nodeVersion:
+        description: |
+          Node.js version spec to use in SemVer notation.
+        required: false
+        type: string
+        default: '24'
+      working-directory:
+        description: |
+          The working directory where the project is located. Defaults to $GITHUB_WORKSPACE.
+        required: false
+        type: string
+        default: '.'
+      setup-firebase-emulator:
+        description: |
+          Set up the Firebase Emulator.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      token:
+        description: |
+          The Codecov token used for private repositories.
+        required: false
+      GOOGLE_APPLICATION_CREDENTIALS_BASE64:
+        description: |
+          The Base64-encoded private key JSON file used to start the Firebase Emulator.
+          Only needed if Cloud Functions must run in the emulator.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  testandcoverage:
+    name: Test npm Package and Upload Coverage
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check environment
+        run: |
+            echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.nodeVersion }}
+          cache: 'npm'
+          cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
+      - name: Cache Firebase emulators
+        if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-${{ runner.arch }}-firebase-emulators-${{ hashFiles('~/.cache/firebase/emulators/**') }}
+      - name: Set up Java
+        if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'microsoft'
+          java-version: '17'
+      - name: Install Firebase CLI tools
+        if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
+        run: npm install -g firebase-tools
+      - name: Install Node.js dependencies
+        run: npm ci
+      - name: Run the tests
+        run: |
+          if ${{ inputs.setup-firebase-emulator }}; then
+              echo -n "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}" | base64 -d > "$RUNNER_TEMP/google-application-credentials.json"
+              export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
+              echo "Stored the Google application credentials at $GOOGLE_APPLICATION_CREDENTIALS"
+          fi
+
+          npm test
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        if: ${{ always() }}
+        with:
+          token: ${{ secrets.token }}
+          working-directory: ${{ inputs.working-directory }}
+          fail_ci_if_error: true
+      - name: Clean up Google application credentials
+        if: ${{ always() }}
+        run: |
+          rm -rf "$RUNNER_TEMP/google-application-credentials.json" || true

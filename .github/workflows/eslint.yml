@@ -1,0 +1,68 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Run ESLint
+
+on:
+  workflow_call:
+    inputs:
+      nodeVersion:
+        description: |
+          Node.js version spec to use in SemVer notation.
+        required: false
+        type: string
+        default: '24'
+
+permissions:
+  checks: write
+  contents: read
+
+jobs:
+  eslint:
+    name: Run ESLint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ inputs.nodeVersion }}
+          cache: 'npm'
+      - name: Install Node.js dependencies
+        run: npm ci
+      - name: Save Code Linting Report JSON
+        run: npm run lint:ci
+        continue-on-error: true
+      - name: Check if PR is from a fork
+        id: fork-check
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          HEAD_REPO_FORK: ${{ github.event.pull_request.head.repo.fork || false }}
+        run: |
+          if [[ "$EVENT_NAME" == 'pull_request' && "$HEAD_REPO_FORK" == 'true' ]]; then
+            echo "is_fork=true" >> "$GITHUB_ENV"
+          else
+            echo "is_fork=false" >> "$GITHUB_ENV"
+          fi
+      - name: Run ESLint if PR is from a fork
+        if: env.is_fork == 'true'
+        run: npm run lint:ci
+      - name: Annotate code linting results
+        if: env.is_fork == 'false'
+        uses: ataylorme/eslint-annotate-action@3.0.0
+        with:
+          only-pr-files: false
+          fail-on-warning: true
+          fail-on-error: true
+          markdown-report-on-step-summary: true
+      - name: Upload ESLint report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eslint_report.json
+          path: eslint_report.json

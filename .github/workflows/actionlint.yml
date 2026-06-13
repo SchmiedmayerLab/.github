@@ -1,0 +1,48 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Lint GitHub Actions Workflows
+
+on:
+  workflow_call:
+    inputs:
+      actionlint_version:
+        description: |
+          Version of actionlint to install and run.
+        required: false
+        type: string
+        default: v1.7.12
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    name: Run actionlint
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+          cache: false
+      - name: Install actionlint
+        env:
+          ACTIONLINT_VERSION: ${{ inputs.actionlint_version }}
+        run: |
+          go install "github.com/rhysd/actionlint/cmd/actionlint@$ACTIONLINT_VERSION"
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Run actionlint
+        run: actionlint

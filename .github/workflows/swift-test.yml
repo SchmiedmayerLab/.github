@@ -1,0 +1,176 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Run Swift Tests
+
+on:
+  workflow_call:
+    inputs:
+      path:
+        description: |
+          The path where the project is located. Defaults to $GITHUB_WORKSPACE.
+        required: false
+        type: string
+        default: '.'
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      swift_version:
+        description: |
+          Specify the Swift language version.
+        required: false
+        type: string
+        default: ''
+      environment:
+        description: |
+          GitHub deployment environment to optionally adjust access to variables and secrets with additional protection rules.
+          https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
+        required: false
+        type: string
+        default: ''
+      checkout_submodules:
+        description: |
+          Flag indicating if submodules should be automatically checked out.
+        required: false
+        type: boolean
+      checkout_lfs:
+        description: |
+          Flag indicating if Git LFS should be used when running the checkout step.
+        required: false
+        type: boolean
+        default: false
+      artifact_name:
+        description: |
+          The name of the artifact that should be uploaded at the end of the build.
+        required: false
+        type: string
+      build_configuration:
+        description: |
+          The build configuration parameter that should be passed to SwiftPM.
+          Either use `Debug` or `Release` to build in the respective modes.
+          If not defined, the `Debug` configuration is used.
+        required: false
+        type: string
+        default: Debug
+      test_flags:
+        description: |
+          Additional flags to pass to `swift test` (e.g. --no-parallel, --filter, --skip).
+        required: false
+        type: string
+        default: ''
+      job_name:
+        description: |
+          The name of the job as it appears in the GitHub Actions UI.
+        required: false
+        type: string
+        default: 'Swift Test'
+    secrets:
+      CHECKOUT_TOKEN:
+        description: |
+          The personal access token (PAT) to use with the checkout action.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  swift_test:
+    name: ${{ inputs.job_name }}
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # This is GitHub's way of implementing ternary expressions (see https://docs.github.com/en/actions/learn-github-actions/expressions)
+          token: ${{ secrets.CHECKOUT_TOKEN != '' && secrets.CHECKOUT_TOKEN || github.token }}
+          submodules: ${{ inputs.checkout_submodules }}
+          lfs: ${{ inputs.checkout_lfs }}
+      - name: Set up Swift
+        uses: SwiftyLab/setup-swift@v1
+        with:
+          swift-version: ${{ inputs.swift_version || 'latest' }}
+      - name: Build package
+        env:
+          BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
+        run: |
+          build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
+          swift build \
+            --configuration "$build_configuration"
+      - name: Run tests
+        env:
+          BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
+          TEST_FLAGS: ${{ inputs.test_flags }}
+        run: |
+          build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
+          test_args=()
+          if [ -n "$TEST_FLAGS" ]; then
+            read -r -a test_args <<< "$TEST_FLAGS"
+          fi
+
+          swift test \
+            --enable-code-coverage \
+            --configuration "$build_configuration" \
+            "${test_args[@]}"
+      - name: Generate coverage report
+        if: ${{ (success() || failure()) && inputs.artifact_name != '' }}
+        env:
+          BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
+        run: |
+          CONFIG="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
+          COVERAGE_FILE=$(find .build/*/"$CONFIG"/codecov -name "*.profdata" -type f | head -1) && \
+          XCTEST_FILE=$(find .build/*/"$CONFIG" -name "*.xctest" -type f | head -1) && \
+          llvm-cov export \
+            "$XCTEST_FILE" \
+            --instr-profile="$COVERAGE_FILE" \
+            --format=lcov > tmp.lcov
+      - name: Convert LCOV format
+        if: ${{ (success() || failure()) && inputs.artifact_name != '' }}
+        shell: bash
+        run: |
+          python3 -c "
+          import re, sys
+          with open('tmp.lcov', 'r') as f:
+              content = f.read()
+          records = re.split(r'(?=^SF:)', content, flags=re.MULTILINE)
+          result = []
+          for record in records:
+              if not record.strip() or not record.startswith('SF:'):
+                  continue
+              lines = record.strip().split('\n')
+              sf_line = lines[0]
+              fn_map = {}
+              fnda_map = {}
+              for line in lines[1:]:
+                  if line.startswith('FN:'):
+                      parts = line[3:].split(',', 1)
+                      if len(parts) == 2:
+                          fn_map[parts[1]] = parts[0]
+                  elif line.startswith('FNDA:'):
+                      parts = line[5:].split(',', 1)
+                      if len(parts) == 2:
+                          fnda_map[parts[1]] = parts[0]
+              result.append(sf_line)
+              for func_id, line_num in fn_map.items():
+                  if func_id in fnda_map:
+                      result.append(f'DA:{line_num},{fnda_map[func_id]}')
+              result.append('end_of_record')
+          with open('${{ inputs.artifact_name }}', 'w') as f:
+              f.write('\n'.join(result))
+          "
+      - name: Upload artifact
+        if: ${{ (success() || failure()) && inputs.artifact_name != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: ${{ inputs.path }}/${{ inputs.artifact_name }}

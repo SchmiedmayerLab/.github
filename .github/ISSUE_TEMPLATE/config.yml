@@ -1,0 +1,13 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+blank_issues_enabled: false
+contact_links:
+  - name: Discussions and Support
+    url: https://github.com/orgs/SchmiedmayerLab/discussions
+    about: We use GitHub Discussions for project discussions and support.

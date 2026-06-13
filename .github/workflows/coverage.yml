@@ -1,0 +1,107 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Merge and Upload Coverage
+
+on:
+  workflow_call:
+    inputs:
+      coveragereports:
+        description: |
+          A string containing all names of the .xcresult files that are downloaded from the artifacts of previous jobs.
+          Multiple values are separated by a space character.
+        required: false
+        type: string
+      coveragereports_lcov:
+        description: |
+          A string containing all names of the .lcov files that are downloaded from the artifacts of previous jobs.
+          Multiple values are separated by a space character.
+          For proper coverage merging with .xcresult files, lcov files must contain only function coverage data.
+        required: false
+        type: string
+    secrets:
+      token:
+        description: |
+          The Codecov token used for private repositories.
+        required: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  create-and-upload-coverage-report:
+    name: Merge and Upload Coverage
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 26.0.1
+      - name: Check environment
+        run: |
+            xcodebuild -version
+            swift --version
+      - uses: actions/download-artifact@v8
+      - name: Install lcov
+        if: ${{ inputs.coveragereports_lcov != '' }}
+        run: |
+          if ! command -v lcov &> /dev/null; then
+            echo "Installing lcov..."
+            brew install lcov
+          fi
+      - name: Merge lcov coverage reports
+        if: ${{ inputs.coveragereports_lcov != '' && inputs.coveragereports == '' }}
+        env:
+          COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
+        run: |
+          read -r -a FILES <<< "$COVERAGE_REPORTS_LCOV"
+          args=()
+          for file in "${FILES[@]}"; do
+            # each x.lcov artifact gets downloaded to `x.lcov/x.lcov` (ie, into a folder with the same name);
+            # we need to take this into account when constructing the paths.
+            args+=(-a "$file/$(basename "$file")")
+          done
+          lcov "${args[@]}" -o info.lcov
+      - name: Merge xcresult coverage reports
+        if: ${{ inputs.coveragereports != '' }}
+        env:
+          COVERAGE_REPORTS: ${{ inputs.coveragereports }}
+        run: |
+            read -r -a FILES <<< "$COVERAGE_REPORTS"
+            NUM_INPUTS=${#FILES[@]}
+            if [ "$NUM_INPUTS" -gt 1 ]; then
+              xcrun xcresulttool merge "${FILES[@]}" --output-path CodeCoverage.xcresult
+              rm -rf "${FILES[@]}"
+            else
+              mv "${FILES[0]}" CodeCoverage.xcresult
+            fi
+      - uses: stanfordbdhg/xccov2lcov@v1
+        if: ${{ inputs.coveragereports != '' }}
+        with:
+          xcresult: CodeCoverage.xcresult
+      - name: Merge xcresult and lcov
+        if: ${{ inputs.coveragereports_lcov != '' && inputs.coveragereports != '' }}
+        env:
+          COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
+        run: |
+          read -r -a FILES <<< "$COVERAGE_REPORTS_LCOV"
+          args=()
+          for file in "${FILES[@]}"; do
+            # each x.lcov artifact gets downloaded to `x.lcov/x.lcov` (ie, into a folder with the same name);
+            # we need to take this into account when constructing the paths.
+            args+=(-a "$file/$(basename "$file")")
+          done
+          lcov -a info.lcov "${args[@]}" -o coverage_combined.lcov
+          mv coverage_combined.lcov info.lcov
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v7
+        with:
+          fail_ci_if_error: true
+          files: info.lcov
+          token: ${{ secrets.token }}

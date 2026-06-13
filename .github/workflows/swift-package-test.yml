@@ -1,0 +1,118 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Test Swift Package
+
+on:
+  workflow_call:
+    inputs:
+      package_name:
+        description: |
+          Swift package name used for artifact naming.
+        type: string
+        required: true
+      scheme:
+        description: |
+          Xcode scheme used for Apple platform tests.
+        type: string
+        required: true
+      platform_matrix:
+        description: |
+          JSON array defining the Apple platform test matrix.
+        type: string
+        required: true
+      ui_platform_matrix:
+        description: |
+          JSON array defining the UI test platform matrix.
+        type: string
+        required: true
+      linux_run_tests:
+        description: |
+          Whether to run the Linux Swift test matrix.
+        type: boolean
+        default: false
+      linux_runners:
+        description: |
+          JSON-based collection of Linux runner labels.
+        type: string
+        default: '["blacksmith-4vcpu-ubuntu-2404"]'
+    secrets:
+      CODECOV_TOKEN:
+        description: |
+          The Codecov token used for private repositories.
+        required: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  package_tests:
+    name: ${{ matrix.platform.name }} (${{ matrix.config }})
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-fastlane.yml@v0.1
+    strategy:
+      matrix:
+        platform: ${{ fromJSON(inputs.platform_matrix) }}
+        config: [Debug, Release]
+      fail-fast: false
+    with:
+      job_name: ${{ format('{0} ({1})', matrix.platform.name, matrix.config) }}
+      runsonlabels: '["macOS", "self-hosted"]'
+      scheme: ${{ inputs.scheme }}
+      destination: ${{ matrix.platform.destination }}
+      buildConfig: ${{ matrix.config }}
+      resultBundle: ${{ format('{0}-{1}-{2}.xcresult', inputs.package_name, matrix.platform.name, matrix.config) }}
+      artifactname: ${{ format('{0}-{1}-{2}.xcresult', inputs.package_name, matrix.platform.name, matrix.config) }}
+
+  ui_tests:
+    name: UI ${{ matrix.platform.name }} (${{ matrix.config }})
+    if: fromJSON(inputs.ui_platform_matrix)[0] != null
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-fastlane.yml@v0.1
+    strategy:
+      matrix:
+        platform: ${{ fromJSON(inputs.ui_platform_matrix) }}
+        config: [Debug, Release]
+      fail-fast: false
+    with:
+      job_name: ${{ format('UI {0} ({1})', matrix.platform.name, matrix.config) }}
+      runsonlabels: '["macOS", "self-hosted"]'
+      path: 'Tests/UITests'
+      scheme: ${{ matrix.platform.scheme }}
+      destination: ${{ matrix.platform.destination }}
+      buildConfig: ${{ matrix.config }}
+      resultBundle: ${{ format('{0}-{1}-{2}.xcresult', matrix.platform.scheme, matrix.platform.name, matrix.config) }}
+      artifactname: ${{ format('{0}-{1}-{2}.xcresult', matrix.platform.scheme, matrix.platform.name, matrix.config) }}
+
+  package_tests_linux:
+    name: Linux (${{ matrix.config }})
+    if: inputs.linux_run_tests
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.1
+    strategy:
+      matrix:
+        config: [Debug, Release]
+      fail-fast: false
+    with:
+      job_name: ${{ format('Linux ({0})', matrix.config) }}
+      runs_on_labels: ${{ inputs.linux_runners }}
+      test_flags: '--no-parallel'
+      build_configuration: ${{ matrix.config }}
+      artifact_name: ${{ format('{0}-Package-Linux-{1}.lcov', inputs.package_name, matrix.config) }}
+
+  uploadcoveragereport:
+    name: Upload Swift Package Coverage
+    needs: [package_tests, ui_tests, package_tests_linux]
+    if: always() && !cancelled() && !failure()
+    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.1
+    with:
+      coveragereports: >-
+        ${{ format('{0}-*.xcresult', inputs.package_name) }}
+        ${{ contains(inputs.ui_platform_matrix, '"scheme":"TestApp"') && 'TestApp-*.xcresult' || '' }}
+        ${{ contains(inputs.ui_platform_matrix, '"scheme":"TestAppWatchApp"') && 'TestAppWatchApp-*.xcresult' || '' }}
+      coveragereports_lcov: ${{ inputs.linux_run_tests && format('{0}-Package-Linux-*.lcov', inputs.package_name) || '' }}
+    secrets:
+      token: ${{ secrets.CODECOV_TOKEN }}

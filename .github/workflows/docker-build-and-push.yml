@@ -1,0 +1,188 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+# Based on the Apodini workflow found at: https://github.com/Apodini/.github/workflows/docker-build-and-push.yml
+# and the Docker documentation found at https://docs.docker.com/build/ci/github-actions/multi-platform/
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+
+name: Build and Push Docker Image
+
+on:
+  workflow_call:
+    inputs:
+      dockerFile:
+        description: |
+          Path or name of the Dockerfile. The default value is `Dockerfile`.
+          The Dockerfile can use `baseimage` to get an architecture-specific Swift base image.
+        required: false
+        type: string
+        default: 'Dockerfile'
+      imageName:
+        description: |
+          The Docker image name, including the organization or account name.
+          An example would be: schmiedmayerlab/example.
+        required: true
+        type: string
+      registry:
+        description: |
+          Server address of the Docker registry. Defaults to ghcr.io.
+        required: false
+        type: string
+        default: 'ghcr.io'
+      workingDirectory:
+        description: |
+          The working directory for the GitHub Actions workflow. Defaults to $GITHUB_WORKSPACE.
+        required: false
+        type: string
+        default: '.'
+      environment:
+        description: |
+          GitHub deployment environment to optionally adjust access to variables and secrets with additional protection rules.
+          https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment
+        required: false
+        type: string
+        default: ''
+    secrets:
+      username:
+        description: |
+          Username for authenticating to the Docker registry. Uses the GitHub actor by default.
+        required: false
+      password:
+        description: |
+          Password or personal access token for authenticating to the Docker registry. Uses the GitHub token by default.
+        required: false
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Build Docker Image
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.workingDirectory }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-latest
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Check environment
+        run: |
+          echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
+          echo "environment: ${{ inputs.environment }}"
+      - uses: actions/checkout@v6
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ inputs.imageName }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}.{{minor}}.{{patch}}
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Log in to ${{ inputs.registry }}
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.username || github.actor }}
+          password: ${{ secrets.password || github.token }}
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ inputs.dockerFile }}
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ inputs.registry }}/${{ inputs.imageName }},push-by-digest=true,name-canonical=true,push=true
+      - name: Export digest
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.build.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+      - name: Set transformed platform name
+        id: set-platform-name
+        env:
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          transformed_platform="${PLATFORM//\//-}"
+          echo "transformed_platform=$transformed_platform" >> "$GITHUB_ENV"
+      - name: Upload digest
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ env.transformed_platform }}-${{ github.run_id }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+  merge:
+    name: Publish Docker Manifest
+    runs-on: ubuntu-latest
+    needs:
+      - build
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          name: digests-linux-amd64-${{ github.run_id }}
+          path: /tmp/digests/
+      - name: Download digests
+        uses: actions/download-artifact@v8
+        with:
+          name: digests-linux-arm64-${{ github.run_id }}
+          path: /tmp/digests/
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ inputs.imageName }}
+      - name: Log in to ${{ inputs.registry }}
+        uses: docker/login-action@v4
+        with:
+          registry: ${{ inputs.registry }}
+          username: ${{ secrets.username || github.actor }}
+          password: ${{ secrets.password || github.token }}
+      - name: Create manifest list and push
+        working-directory: /tmp/digests
+        env:
+          IMAGE_NAME: ${{ inputs.imageName }}
+          REGISTRY: ${{ inputs.registry }}
+        run: |
+          tag_args=()
+          while IFS= read -r tag; do
+            tag_args+=("-t" "${REGISTRY}/${tag}")
+          done < <(jq -r '.tags[]' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+
+          digest_args=()
+          for digest in *; do
+            digest_args+=("${REGISTRY}/${IMAGE_NAME}@sha256:${digest}")
+          done
+
+          docker buildx imagetools create "${tag_args[@]}" "${digest_args[@]}"
+      - name: Inspect image
+        env:
+          IMAGE_NAME: ${{ inputs.imageName }}
+          REGISTRY: ${{ inputs.registry }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          docker buildx imagetools inspect "${REGISTRY}/${IMAGE_NAME}:${VERSION}"

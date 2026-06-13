@@ -1,0 +1,56 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Validate Repository
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reuse_action:
+    name: Check REUSE Compliance
+    uses: ./.github/workflows/reuse.yml
+  actionlint:
+    name: Lint GitHub Actions Workflows
+    uses: ./.github/workflows/actionlint.yml
+  markdown_link_check:
+    name: Check Markdown Links
+    uses: ./.github/workflows/markdown-links.yml
+    with:
+      runs_on_labels: '["ubuntu-latest"]'
+  yamllint:
+    name: Lint YAML
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+      - name: Install yamllint
+        run: pip install yamllint
+      - name: Run yamllint with custom config
+        run: yamllint -c .yamllint.yml .
+  whitespace:
+    name: Check Whitespace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+      - name: Check trailing whitespace
+        run: |
+          if git grep -nI '[[:blank:]]$' -- .; then
+            echo "Trailing whitespace found."
+            exit 1
+          fi

@@ -1,0 +1,94 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Publish npm Package
+
+on:
+  workflow_call:
+    inputs:
+      nodeVersion:
+        description: |
+          Node.js version spec to use in SemVer notation.
+        required: false
+        type: string
+        default: '24'
+      cacheDependencyPath:
+        description: |
+          Node cache dependency path. Required only if package-lock.json is not in the root.
+        required: false
+        type: string
+        default: ''
+      workingDirectory:
+        description: |
+          Set the working directory if your package is not in the root.
+        required: false
+        type: string
+        default: '.'
+      packageVersion:
+        description: |
+          Released package version.
+        required: true
+        type: string
+      packageTag:
+        description: |
+          Released package tag.
+        required: false
+        type: string
+        default: "latest"
+      workspaces:
+        description: |
+          Set to true to enable npm workspaces publishing.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      NPM_TOKEN:
+        description: |
+          Used to perform authenticated operations against the npm registry.
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish-package:
+    name: Publish npm Package
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ${{ inputs.workingDirectory }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          cache: 'npm'
+          cache-dependency-path: ${{ inputs.cacheDependencyPath }}
+          node-version: ${{ inputs.nodeVersion }}
+          registry-url: 'https://registry.npmjs.org'
+      - name: Install dependencies
+        run: npm ci
+      - name: Set version
+        run: |
+          if [ "${{ inputs.workspaces }}" = "true" ]; then
+            # Update version in all workspace packages
+            npm version --no-git-tag-version --workspaces ${{ inputs.packageVersion }}
+          else
+            # Update version in root package only
+            npm version --no-git-tag-version --tag ${{ inputs.packageTag }} ${{ inputs.packageVersion }}
+          fi
+      - name: Build
+        run: npm run build
+      - name: Publish
+        run: |
+          if [ "${{ inputs.workspaces }}" = "true" ]; then
+            npm publish --workspaces --provenance --access public --tag ${{ inputs.packageTag }}
+          else
+            npm publish --provenance --access public --tag ${{ inputs.packageTag }}
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

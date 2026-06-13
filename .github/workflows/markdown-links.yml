@@ -1,0 +1,58 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Check Markdown Links
+
+on:
+  workflow_call:
+    inputs:
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["macOS", "self-hosted"]'
+
+permissions:
+  contents: read
+
+jobs:
+  markdown_link_check:
+    name: Check Markdown Links
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check and Create Linkspector Configuration
+        run: |
+          CONFIG_FILE=".linkspector.yml"
+          if [ ! -f "$CONFIG_FILE" ]; then
+            echo "Configuration file not found. Creating a new one."
+            cat > "$CONFIG_FILE" <<'EOF'
+          dirs:
+            - .
+          useGitIgnore: true
+          ignorePatterns:
+            - pattern: '^doc:.*$'
+            - pattern: '^http://localhost.*$'
+          replacementPatterns:
+            - pattern: '(.*)#gh-dark-mode-only'
+              replacement: '$1'
+            - pattern: '(.*)#gh-light-mode-only'
+              replacement: '$1'
+          EOF
+          else
+            echo "Configuration file exists. Skipping creation."
+          fi
+          echo "Contents of $CONFIG_FILE:"
+          cat "$CONFIG_FILE"
+      - name: Linkspector
+        uses: umbrelladocs/action-linkspector@v1
+        with:
+          filter_mode: nofilter
+          reporter: github-pr-annotations
+          fail_level: error

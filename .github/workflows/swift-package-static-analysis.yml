@@ -1,0 +1,58 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Analyze Swift Package
+
+on:
+  workflow_call:
+    inputs:
+      library_products:
+        description: |
+          JSON array of library product names.
+        type: string
+        required: true
+      platform_name:
+        description: |
+          Platform name for breaking changes analysis.
+        type: string
+        required: true
+      platform_version:
+        description: |
+          Platform version string for breaking changes analysis.
+        type: string
+        default: ""
+      diagnose_breaking_changes:
+        description: |
+          Whether to diagnose API breaking changes.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  reuse_action:
+    name: Check REUSE Compliance
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.1
+  swiftlint:
+    name: Run SwiftLint
+    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.1
+  markdown_link_check:
+    name: Check Markdown Links
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.1
+  breaking_changes:
+    name: Diagnose Swift Package API Breaking Changes
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.1
+    if: ${{ inputs.diagnose_breaking_changes && github.ref_name != 'main' }}
+    with:
+      library_products: ${{ inputs.library_products }}
+      platform_name: ${{ inputs.platform_name }}
+      platform_version: ${{ inputs.platform_version }}
+      runsonlabels: '["macOS", "self-hosted"]'
