@@ -434,7 +434,7 @@ jobs:
     name: Release XCFramework
     uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.2
     with:
-      version: v0.2.0
+      version: v0.2
     secrets:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
