@@ -1,0 +1,257 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Build and Test with xcodebuild
+
+on:
+  workflow_call:
+    inputs:
+      job_name:
+        description: |
+          Custom name for the job displayed in the GitHub Actions UI.
+          Useful to override the default name when called from other reusable workflows.
+        required: false
+        type: string
+        default: 'Build and Test with xcodebuild'
+      path:
+        description: |
+          The path where the project is located. Defaults to $GITHUB_WORKSPACE.
+        required: false
+        type: string
+        default: '.'
+      runsonlabels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["macos-26"]'
+      xcodeversion:
+        description: |
+          The Xcode version used for the build.
+        required: false
+        type: string
+        default: 'latest-stable'
+      scheme:
+        description: |
+          The scheme in the Xcode project.
+        required: true
+        type: string
+      buildConfig:
+        description: |
+          The build configuration parameter that should be passed to xcodebuild.
+          Either use `Debug` or `Release` to build in the respective modes.
+          If not defined, the `Debug` configuration is used.
+        required: false
+        type: string
+        default: 'Debug'
+      destination:
+        description: |
+          The destination parameter that should be passed to xcodebuild.
+          Defaults to the iOS simulator using an iPhone 17 Pro.
+        required: false
+        type: string
+        default: 'platform=iOS Simulator,name=iPhone 17 Pro'
+      resultBundle:
+        description: |
+          The name of the Xcode result bundle that is passed to xcodebuild.
+          If not defined, the name of the scheme + .xcresult is used.
+        required: false
+        type: string
+        default: ''
+      swiftVersion:
+        description: |
+          Specify the Swift language version when using xcodebuild.
+        required: false
+        type: string
+        default: ''
+      test:
+        description: |
+          A flag indicating if the tests of the Xcode project scheme should run when using xcodebuild.
+        required: false
+        type: boolean
+        default: true
+      testplan:
+        description: |
+          The test plan that should be run.
+        required: false
+        type: string
+        default: ''
+      spm-disable-prebuilts:
+        description: |
+          Disables package prebuilts when resolving SPM dependencies.
+        type: boolean
+        default: false
+      artifactname:
+        description: |
+          The name and path of the artifact that should be uploaded at the end of the build.
+        required: false
+        type: string
+        default: ''
+      codeql:
+        description: |
+          Use CodeQL code scanning.
+        required: false
+        type: boolean
+        default: false
+      checkout_submodules:
+        description: |
+          Flag indicating if submodules should be automatically checked out.
+        required: false
+        type: boolean
+        default: false
+      checkout_lfs:
+        description: |
+          Flag indicating if Git LFS should be used when running the checkout step.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      CHECKOUT_TOKEN:
+        description: |
+          The personal access token (PAT) to use with the checkout action.
+        required: false
+
+jobs:
+  build_and_test:
+    name: ${{ inputs.job_name }}
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # This is GitHub's way of implementing ternary expressions (see https://docs.github.com/en/actions/learn-github-actions/expressions)
+          token: ${{ secrets.CHECKOUT_TOKEN != '' && secrets.CHECKOUT_TOKEN || github.token }}
+          submodules: ${{ inputs.checkout_submodules }}
+          lfs: ${{ inputs.checkout_lfs }}
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ inputs.xcodeversion }}
+      - name: Check environment
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
+          xcrun simctl list
+      - name: Install xcbeautify
+        if: ${{ runner.environment == 'github-hosted' }}
+        run: brew install xcbeautify
+      - name: Initialize CodeQL
+        if: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
+        uses: github/codeql-action/init@v4
+        with:
+          languages: swift
+          build-mode: manual
+          db-location: '${{ inputs.path }}/.codeql'
+      - name: Mechanism to resolve CodeQL issue https://github.com/github/codeql-action/issues/2506#issuecomment-2594033147
+        if: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
+        run: |
+          XCODE_PATH=$(xcode-select -p)
+          mkdir -p "$XCODE_PATH/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+          cp "$XCODE_PATH"/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/*.dylib "$XCODE_PATH/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+          sudo mkdir -p /usr/local/lib
+          sudo cp "$XCODE_PATH"/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/*.dylib /usr/local/lib
+      - name: Check available simulators
+        env:
+          SCHEME: ${{ inputs.scheme }}
+        run: |
+          xcrun xcodebuild -scheme "$SCHEME" -showdestinations
+      - name: Resolve dependencies
+        env:
+          SCHEME: ${{ inputs.scheme }}
+          SPM_DISABLE_PREBUILTS: ${{ inputs.spm-disable-prebuilts }}
+        run: |
+          prebuilt_args=()
+          if [ "$SPM_DISABLE_PREBUILTS" = "true" ]; then
+              prebuilt_args=(-IDEPackageEnablePrebuilts=NO)
+          fi
+
+          xcodebuild \
+            -scheme "$SCHEME" \
+            -resolvePackageDependencies \
+            -derivedDataPath ".derivedData" \
+            "${prebuilt_args[@]}" \
+          | xcbeautify \
+          || true
+      - name: Build and test
+        env:
+          BUILD_CONFIG: ${{ inputs.buildConfig }}
+          DESTINATION: ${{ inputs.destination }}
+          RESULT_BUNDLE_INPUT: ${{ inputs.resultBundle }}
+          SCHEME: ${{ inputs.scheme }}
+          SPM_DISABLE_PREBUILTS: ${{ inputs.spm-disable-prebuilts }}
+          SWIFT_VERSION: ${{ inputs.swiftVersion }}
+          TEST_ENABLED: ${{ inputs.test }}
+          TESTPLAN: ${{ inputs.testplan }}
+        run: |
+          if [ "$TEST_ENABLED" = "true" ]; then
+              xcode_command="test"
+              code_coverage_args=(-enableCodeCoverage YES)
+          else
+              xcode_command="build"
+              code_coverage_args=()
+          fi
+
+          if [ -z "$RESULT_BUNDLE_INPUT" ]; then
+              result_bundle="$SCHEME.xcresult"
+          else
+              result_bundle="$RESULT_BUNDLE_INPUT"
+          fi
+
+          if [ "$BUILD_CONFIG" = "Release" ]; then
+              enable_testing_flag="-enable-testing"
+          else
+              enable_testing_flag=""
+          fi
+
+          other_swift_flags="\$(inherited)"
+          if [ -n "$enable_testing_flag" ]; then
+              other_swift_flags="$other_swift_flags $enable_testing_flag"
+          fi
+          if [ -n "$SWIFT_VERSION" ]; then
+              other_swift_flags="$other_swift_flags -swift-version $SWIFT_VERSION"
+          fi
+
+          if [ -n "$TESTPLAN" ]; then
+              testplan_args=(-testPlan "$TESTPLAN")
+          else
+              testplan_args=()
+          fi
+
+          if [ "$SPM_DISABLE_PREBUILTS" = "true" ]; then
+              prebuilt_args=(-IDEPackageEnablePrebuilts=NO)
+          else
+              prebuilt_args=()
+          fi
+
+          set -o pipefail \
+          && xcodebuild "$xcode_command" \
+            -scheme "$SCHEME" \
+            -configuration "$BUILD_CONFIG" \
+            -destination "$DESTINATION" \
+            "${testplan_args[@]}" \
+            "${code_coverage_args[@]}" \
+            -derivedDataPath ".derivedData" \
+            -resultBundlePath "$result_bundle" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            OTHER_SWIFT_FLAGS="$other_swift_flags" \
+            -skipPackagePluginValidation \
+            -skipMacroValidation \
+            "${prebuilt_args[@]}" \
+          | xcbeautify
+      - name: Run CodeQL analysis
+        if: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
+        uses: github/codeql-action/analyze@v4
+      - name: Upload artifact
+        if: ${{ (success() || failure()) && inputs.artifactname != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifactname }}
+          path: ${{ inputs.path }}/${{ inputs.artifactname }}

@@ -40,16 +40,16 @@ permissions:
 jobs:
   reuse_action:
     name: Check REUSE Compliance
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@testPR
   swiftlint:
     name: Run SwiftLint
-    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@testPR
   markdown_link_check:
     name: Check Markdown Links
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@testPR
   breaking_changes:
     name: Diagnose Swift Package API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@testPR
     if: ${{ inputs.diagnose_breaking_changes && github.ref_name != 'main' }}
     with:
       library_products: ${{ inputs.library_products }}

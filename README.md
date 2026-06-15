@@ -49,7 +49,9 @@ The repository-local [`validate.yml`](.github/workflows/validate.yml) and [`rele
 | [`swift-package-static-analysis.yml`](#analyze-swift-package) | Run the standard static analysis checks for Swift packages. |
 | [`swift-package-test.yml`](#test-swift-package) | Test a Swift package across the configured Apple and Linux matrices. |
 | [`swift-test.yml`](#run-swift-tests) | Run SwiftPM tests and optionally export LCOV coverage. |
-| [`xcodebuild-fastlane.yml`](#build-and-test-with-xcodebuild-or-fastlane) | Build and test Apple projects with xcodebuild, fastlane, or a custom command. |
+| [`xcodebuild.yml`](#build-and-test-with-xcodebuild) | Build and test Apple projects with xcodebuild. |
+| [`firebase-emulators-exec.yml`](#run-command-with-firebase-emulator) | Run a trusted command through the Firebase Emulator. |
+| [`xcode-deploy.yml`](#deploy-xcode-project) | Deploy Xcode projects with signing and file injection setup. |
 | [`xcarchive.yml`](#build-xcarchive) | Build an XCArchive and upload it as an artifact. |
 | [`xcframework.yml`](#build-xcframework) | Build an XCFramework from XCArchive artifacts. |
 | [`xcframework-release.yml`](#release-xcframework) | Commit and release an XCFramework artifact. |
@@ -304,19 +306,88 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.1
 ```
 
-##### Build and Test with xcodebuild or fastlane
+##### Build and Test with xcodebuild
 
-Use [`xcodebuild-fastlane.yml`](.github/workflows/xcodebuild-fastlane.yml) for Apple projects that need a direct xcodebuild, fastlane, or custom command setup.
+Use [`xcodebuild.yml`](.github/workflows/xcodebuild.yml) for Apple projects that need direct xcodebuild tests or builds.
+The workflow intentionally does not declare its own `permissions` block because its CodeQL path is optional.
+Callers that set `codeql: true` must grant `security-events: write`; normal build and test jobs can omit that permission.
 
 ```yml
 jobs:
   build-and-test:
     name: Build and Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-fastlane.yml@v0.1
+    permissions:
+      contents: read
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.1
     with:
       artifactname: TemplatePackage.xcresult
       runsonlabels: '["macOS", "self-hosted"]'
       scheme: TemplatePackage
+```
+
+CodeQL analysis uses the same workflow with `codeql: true`.
+Because GitHub sets unspecified token scopes to `none` when any explicit permission is declared, grant both `contents: read` and `security-events: write` on the calling job.
+
+```yml
+jobs:
+  codeql:
+    name: Build and Analyze with CodeQL
+    permissions:
+      contents: read
+      security-events: write
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.1
+    with:
+      codeql: true
+      scheme: TemplatePackage
+```
+
+##### Run Command with Firebase Emulator
+
+Use [`firebase-emulators-exec.yml`](.github/workflows/firebase-emulators-exec.yml) for test or validation commands that must run while Firebase emulators are active.
+The `command` input is executed through `firebase emulators:exec` and can be any trusted shell command.
+
+```yml
+jobs:
+  firebase-ui-tests:
+    name: Run UI Tests with Firebase Emulator
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.1
+    with:
+      command: bundle exec fastlane uitest
+      firebase_emulator_import: ./firebase-export
+    secrets:
+      GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+```
+
+##### Deploy Xcode Project
+
+Use [`xcode-deploy.yml`](.github/workflows/xcode-deploy.yml) for Xcode deployments that need code signing, App Store Connect environment variables, or a Base64-encoded secret file written before deployment.
+The `injected_secret_file_path` input defines the injected file path, name, and extension.
+The workflow does not start Firebase emulators and does not validate that `command` is a fastlane command.
+Use `fastlane`, `bundle exec fastlane`, or another trusted deployment command.
+
+```yml
+jobs:
+  deploy:
+    name: Deploy Xcode Project
+    permissions:
+      contents: read
+    uses: SchmiedmayerLab/.github/.github/workflows/xcode-deploy.yml@v0.1
+    with:
+      command: >-
+        bundle exec fastlane deploy environment:"staging"
+        versionname:"4.0.5" releasenotes:"Test Deployment."
+      environment: staging
+      setup_signing: true
+      injected_secret_file_path: App/DeploymentConfiguration.json
+    secrets:
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+      BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+      INJECTED_SECRET_FILE_BASE64: ${{ secrets.DEPLOYMENT_CONFIGURATION_BASE64 }}
+      P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
 ```
 
 ##### Build XCArchive

@@ -65,7 +65,7 @@ permissions:
 jobs:
   build-xcarchive:
     name: Build XCArchive
-    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@testPR
     with:
       workspaceFile: ${{ inputs.workspaceFile }}
       xcArchiveName: ${{ inputs.xcFrameworkName }}
