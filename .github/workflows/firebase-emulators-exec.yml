@@ -1,0 +1,142 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Run Command with Firebase Emulator
+
+on:
+  workflow_call:
+    inputs:
+      job_name:
+        description: |
+          Custom name for the job displayed in the GitHub Actions UI.
+          Useful to override the default name when called from other reusable workflows.
+        required: false
+        type: string
+        default: 'Run Command with Firebase Emulator'
+      command:
+        description: |
+          Trusted shell command to run through `firebase emulators:exec`.
+        required: true
+        type: string
+      path:
+        description: |
+          The path where the project is located. Defaults to $GITHUB_WORKSPACE.
+        required: false
+        type: string
+        default: '.'
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["macos-26"]'
+      xcode_version:
+        description: |
+          The Xcode version used for the command.
+        required: false
+        type: string
+        default: 'latest-stable'
+      firebase_emulator_import:
+        description: |
+          Firebase import directory that contains Authentication, Cloud Firestore, Realtime Database and Cloud Storage data for Firebase emulators.
+          Can be used to inject a shareable, common baseline data set.
+        required: false
+        type: string
+        default: ''
+      firebase_json_path:
+        description: |
+          Path to the firebase.json file used to start the Firebase Emulator.
+          Defaults to the root of the project.
+        required: false
+        type: string
+        default: './firebase.json'
+      checkout_submodules:
+        description: |
+          Flag indicating if submodules should be automatically checked out.
+        required: false
+        type: boolean
+        default: false
+      checkout_lfs:
+        description: |
+          Flag indicating if Git LFS should be used when running the checkout step.
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      GOOGLE_APPLICATION_CREDENTIALS_BASE64:
+        description: |
+          The Base64-encoded private key JSON file used to start the Firebase Emulator.
+          Only needed if Cloud Functions must run in the emulator.
+        required: false
+
+jobs:
+  firebase_harness:
+    name: ${{ inputs.job_name }}
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
+    defaults:
+      run:
+        working-directory: ${{ inputs.path }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: ${{ inputs.checkout_submodules }}
+          lfs: ${{ inputs.checkout_lfs }}
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: ${{ inputs.xcode_version }}
+      - name: Check environment
+        run: |
+          xcodebuild -version
+          swift --version
+          echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
+      - name: Cache Firebase emulators
+        if: ${{ runner.environment == 'github-hosted' }}
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/firebase/emulators
+          key: ${{ runner.os }}-${{ runner.arch }}-firebase-emulators-${{ hashFiles('~/.cache/firebase/emulators/**') }}
+      - name: Set up Node.js
+        if: ${{ runner.environment == 'github-hosted' }}
+        uses: actions/setup-node@v6
+        with:
+          package-manager-cache: false
+      - name: Set up Java
+        if: ${{ runner.environment == 'github-hosted' }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: 'microsoft'
+          java-version: '17'
+      - name: Install Firebase CLI tools
+        if: ${{ runner.environment == 'github-hosted' }}
+        run: npm install -g firebase-tools
+      - name: Run command with Firebase Emulator
+        env:
+          COMMAND: ${{ inputs.command }}
+          FIREBASE_EMULATOR_IMPORT: ${{ inputs.firebase_emulator_import }}
+          FIREBASE_JSON_PATH: ${{ inputs.firebase_json_path }}
+          GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+        run: |
+          # We try to do an npm install in the functions directory.
+          npm --prefix ./functions install || true
+
+          if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" ]; then
+              echo -n "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" | base64 -d > "$RUNNER_TEMP/google-application-credentials.json"
+              export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
+              echo "Stored the Google application credentials at $GOOGLE_APPLICATION_CREDENTIALS"
+          fi
+
+          if [ -n "$FIREBASE_EMULATOR_IMPORT" ]; then
+              echo "Importing firebase emulator data from $FIREBASE_EMULATOR_IMPORT"
+              firebase emulators:exec -c "$FIREBASE_JSON_PATH" --import="$FIREBASE_EMULATOR_IMPORT" "$COMMAND"
+          else
+              firebase emulators:exec -c "$FIREBASE_JSON_PATH" "$COMMAND"
+          fi
+      - name: Clean up Google application credentials
+        if: always()
+        run: |
+          rm -rf "$RUNNER_TEMP/google-application-credentials.json" || true

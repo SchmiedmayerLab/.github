@@ -36,12 +36,12 @@ permissions:
 jobs:
   setup:
     name: Set Up Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.2
 
   build_and_test:
     name: Test Swift Package
     needs: setup
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.2
     with:
       package_name: ${{ needs.setup.outputs.package_name }}
       scheme: ${{ needs.setup.outputs.scheme }}
@@ -54,7 +54,7 @@ jobs:
   static_analysis:
     name: Analyze Swift Package
     needs: setup
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.2
     with:
       library_products: ${{ needs.setup.outputs.library_products }}
       platform_name: ${{ needs.setup.outputs.platform_name }}

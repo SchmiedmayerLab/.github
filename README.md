@@ -45,7 +45,9 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | [`swift-package-static-analysis.yml`](#analyze-swift-package) | Run the standard static analysis checks for Swift packages. |
 | [`swift-package-test.yml`](#test-swift-package) | Test a Swift package across the configured Apple and Linux matrices. |
 | [`swift-test.yml`](#run-swift-tests) | Run SwiftPM tests and optionally export LCOV coverage. |
-| [`xcodebuild-fastlane.yml`](#build-and-test-with-xcodebuild-or-fastlane) | Build and test Apple projects with xcodebuild, fastlane, or a custom command. |
+| [`xcodebuild.yml`](#build-and-test-with-xcodebuild) | Build and test Apple projects with xcodebuild. |
+| [`firebase-emulators-exec.yml`](#run-command-with-firebase-emulator) | Run a trusted command through the Firebase Emulator. |
+| [`xcode-deploy.yml`](#deploy-xcode-project) | Deploy Xcode projects with signing and file injection setup. |
 | [`xcarchive.yml`](#build-xcarchive) | Build an XCArchive and upload it as an artifact. |
 | [`xcframework.yml`](#build-xcframework) | Build an XCFramework from XCArchive artifacts. |
 | [`xcframework-release.yml`](#release-xcframework) | Commit and release an XCFramework artifact. |
@@ -86,7 +88,7 @@ Use it for repositories that maintain their own workflows.
 jobs:
   actionlint:
     name: Lint GitHub Actions Workflows
-    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.2
     with:
       runs_on_labels: '["ubuntu-latest"]'
 ```
@@ -100,7 +102,7 @@ Use it for JavaScript and TypeScript projects with `npm run lint:ci`.
 jobs:
   eslint:
     name: Run ESLint
-    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.2
 ```
 
 ##### Check Markdown Links
@@ -112,7 +114,7 @@ Use it for documentation-heavy repositories.
 jobs:
   markdown-links:
     name: Check Markdown Links
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.2
     with:
       runs_on_labels: '["ubuntu-latest"]'
 ```
@@ -126,7 +128,7 @@ Use it for Swift packages and Xcode projects that can be scanned from the reposi
 jobs:
   periphery:
     name: Run Periphery
-    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.2
 ```
 
 ##### Check REUSE Compliance
@@ -138,7 +140,7 @@ Use it for repositories that follow the REUSE specification.
 jobs:
   reuse:
     name: Check REUSE Compliance
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.2
 ```
 
 ##### Run SwiftLint
@@ -150,7 +152,7 @@ Use it for Swift repositories that define SwiftLint rules.
 jobs:
   swiftlint:
     name: Run SwiftLint
-    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.2
 ```
 
 #### Swift and Apple Platforms
@@ -164,7 +166,7 @@ Use it after test jobs that upload coverage artifacts.
 jobs:
   coverage:
     name: Merge and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.2
     with:
       coveragereports: ResultBundle1.xcresult ResultBundle2.xcresult
     secrets:
@@ -185,7 +187,7 @@ permissions:
 jobs:
   docc:
     name: Deploy DocC Documentation
-    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.2
     with:
       scheme: ExamplePackage
 ```
@@ -199,7 +201,7 @@ Use it for Swift packages that can rely on automatic metadata detection.
 jobs:
   api-breaking-changes:
     name: Diagnose Swift API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.2
 ```
 
 ##### Diagnose Swift Package API Breaking Changes
@@ -211,7 +213,7 @@ Use it when another workflow already knows the package metadata.
 jobs:
   package-breaking-changes:
     name: Diagnose Swift Package API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.2
     with:
       library_products: '["ExamplePackage"]'
       platform_name: ios
@@ -227,7 +229,7 @@ It detects package metadata, runs tests, uploads coverage when available, and ru
 jobs:
   swift-package-ci:
     name: Swift Package CI
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.2
     secrets: inherit
 ```
 
@@ -240,11 +242,11 @@ Use it as a setup job before lower-level Swift package workflows.
 jobs:
   setup:
     name: Set Up Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.2
   test:
     name: Test Swift Package
     needs: setup
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.2
     with:
       package_name: ${{ needs.setup.outputs.package_name }}
       scheme: ${{ needs.setup.outputs.scheme }}
@@ -261,7 +263,7 @@ Use it when package metadata is already available from `swift-package-setup.yml`
 jobs:
   analyze:
     name: Analyze Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.2
     with:
       library_products: '["ExamplePackage"]'
       platform_name: ios
@@ -277,7 +279,7 @@ Use it when package metadata and platform matrices are provided explicitly.
 jobs:
   test:
     name: Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.2
     with:
       package_name: ExamplePackage
       scheme: ExamplePackage
@@ -297,22 +299,91 @@ Use it for Linux Swift package tests or simple SwiftPM test jobs.
 jobs:
   swift-test:
     name: Run Swift Tests
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.2
 ```
 
-##### Build and Test with xcodebuild or fastlane
+##### Build and Test with xcodebuild
 
-Use [`xcodebuild-fastlane.yml`](.github/workflows/xcodebuild-fastlane.yml) for Apple projects that need a direct xcodebuild, fastlane, or custom command setup.
+Use [`xcodebuild.yml`](.github/workflows/xcodebuild.yml) for Apple projects that need direct xcodebuild tests or builds.
+The workflow intentionally does not declare its own `permissions` block because its CodeQL path is optional.
+Callers that set `codeql: true` must grant `security-events: write`; normal build and test jobs can omit that permission.
 
 ```yml
 jobs:
   build-and-test:
     name: Build and Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-fastlane.yml@v0.1
+    permissions:
+      contents: read
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.2
     with:
       artifactname: TemplatePackage.xcresult
       runsonlabels: '["macOS", "self-hosted"]'
       scheme: TemplatePackage
+```
+
+CodeQL analysis uses the same workflow with `codeql: true`.
+Because GitHub sets unspecified token scopes to `none` when any explicit permission is declared, grant both `contents: read` and `security-events: write` on the calling job.
+
+```yml
+jobs:
+  codeql:
+    name: Build and Analyze with CodeQL
+    permissions:
+      contents: read
+      security-events: write
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.2
+    with:
+      codeql: true
+      scheme: TemplatePackage
+```
+
+##### Run Command with Firebase Emulator
+
+Use [`firebase-emulators-exec.yml`](.github/workflows/firebase-emulators-exec.yml) for test or validation commands that must run while Firebase emulators are active.
+The `command` input is executed through `firebase emulators:exec` and can be any trusted shell command.
+
+```yml
+jobs:
+  firebase-ui-tests:
+    name: Run UI Tests with Firebase Emulator
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.2
+    with:
+      command: bundle exec fastlane uitest
+      firebase_emulator_import: ./firebase-export
+    secrets:
+      GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+```
+
+##### Deploy Xcode Project
+
+Use [`xcode-deploy.yml`](.github/workflows/xcode-deploy.yml) for Xcode deployments that need code signing, App Store Connect environment variables, or a Base64-encoded secret file written before deployment.
+The `injected_secret_file_path` input defines the injected file path, name, and extension.
+The workflow does not start Firebase emulators and does not validate that `command` is a fastlane command.
+Use `fastlane`, `bundle exec fastlane`, or another trusted deployment command.
+
+```yml
+jobs:
+  deploy:
+    name: Deploy Xcode Project
+    permissions:
+      contents: read
+    uses: SchmiedmayerLab/.github/.github/workflows/xcode-deploy.yml@v0.2
+    with:
+      command: >-
+        bundle exec fastlane deploy environment:"staging"
+        versionname:"4.0.5" releasenotes:"Test Deployment."
+      environment: staging
+      setup_signing: true
+      injected_secret_file_path: App/DeploymentConfiguration.json
+    secrets:
+      APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      BUILD_CERTIFICATE_BASE64: ${{ secrets.BUILD_CERTIFICATE_BASE64 }}
+      BUILD_PROVISION_PROFILE_BASE64: ${{ secrets.BUILD_PROVISION_PROFILE_BASE64 }}
+      INJECTED_SECRET_FILE_BASE64: ${{ secrets.DEPLOYMENT_CONFIGURATION_BASE64 }}
+      P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
 ```
 
 ##### Build XCArchive
@@ -324,7 +395,7 @@ Use it for binary distribution pipelines that package Apple platform archives.
 jobs:
   xcarchive:
     name: Build XCArchive
-    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.2
     with:
       workspaceFile: example.xcworkspace
       xcArchiveName: ExampleKit
@@ -340,7 +411,7 @@ Use [`xcframework.yml`](.github/workflows/xcframework.yml) to package XCArchive 
 jobs:
   xcframework:
     name: Build XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.2
     with:
       workspaceFile: example.xcworkspace
       xcFrameworkName: ExampleKit
@@ -361,9 +432,9 @@ permissions:
 jobs:
   release-xcframework:
     name: Release XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.2
     with:
-      version: v0.1.0
+      version: v0.2
     secrets:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
@@ -379,7 +450,7 @@ Use it for Firebase Hosting, Functions, Firestore rules, or other Firebase deplo
 jobs:
   firebase:
     name: Deploy Firebase
-    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.2
     with:
       arguments: --only hosting
     secrets:
@@ -399,7 +470,7 @@ permissions:
 jobs:
   pages:
     name: Deploy Next.js Site
-    uses: SchmiedmayerLab/.github/.github/workflows/nextjs-github-pages.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/nextjs-github-pages.yml@v0.2
 ```
 
 ##### Publish npm Package
@@ -411,7 +482,7 @@ Use it from release workflows that have an npm token available.
 jobs:
   npm-publish:
     name: Publish npm Package
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.2
     with:
       packageVersion: 0.1.0
     secrets:
@@ -426,7 +497,7 @@ Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm p
 jobs:
   npm-test:
     name: Test npm Package and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.2
     secrets:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```
@@ -445,7 +516,7 @@ permissions:
 jobs:
   docker:
     name: Build and Push Docker Image
-    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.2
     with:
       imageName: schmiedmayerlab/example
 ```
@@ -459,7 +530,7 @@ Use it for projects where integration tests run against local services.
 jobs:
   docker-compose:
     name: Test Docker Compose Stack
-    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.2
     with:
       testscript: scripts/smoke-test.sh
 ```
@@ -478,7 +549,7 @@ permissions:
 jobs:
   release-tags:
     name: Tag Action Release
-    uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.2
     secrets:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
     with:
@@ -494,7 +565,7 @@ Use it when another job needs the formatted notes from the `releasenotes` output
 jobs:
   release-notes:
     name: Format Release Notes
-    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.1
+    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.2
     with:
       release-tag: ${{ github.ref_name }}
       repository: ${{ github.repository }}
