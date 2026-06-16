@@ -81,7 +81,7 @@ jobs:
             else
               mv "${FILES[0]}" CodeCoverage.xcresult
             fi
-      - uses: stanfordbdhg/xccov2lcov@v1
+      - uses: SchmiedmayerLab/xccov2lcov@v1
         if: ${{ inputs.coveragereports != '' }}
         with:
           xcresult: CodeCoverage.xcresult

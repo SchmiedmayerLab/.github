@@ -39,7 +39,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Run SwiftLint
-        uses: stanfordbdhg/action-swiftlint@v4
+        uses: SchmiedmayerLab/action-swiftlint@v4
         with:
           args: --strict
           version: ${{ inputs.version }}
