@@ -28,8 +28,6 @@ jobs:
   markdown_link_check:
     name: Check Markdown Links
     uses: ./.github/workflows/markdown-links.yml
-    with:
-      runs_on_labels: '["ubuntu-latest"]'
   yamllint:
     name: Lint YAML
     runs-on: ubuntu-latest
