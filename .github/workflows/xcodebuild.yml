@@ -39,8 +39,10 @@ on:
       scheme:
         description: |
           The scheme in the Xcode project.
-        required: true
+          If omitted, the workflow infers the Swift package scheme from Package.swift or the only shared Xcode scheme.
+        required: false
         type: string
+        default: ''
       buildConfig:
         description: |
           The build configuration parameter that should be passed to xcodebuild.
@@ -59,7 +61,7 @@ on:
       resultBundle:
         description: |
           The name of the Xcode result bundle that is passed to xcodebuild.
-          If not defined, the name of the scheme + .xcresult is used.
+          If not defined, Swift packages use the package name + .xcresult and Xcode projects use the resolved scheme + .xcresult.
         required: false
         type: string
         default: ''
@@ -72,6 +74,7 @@ on:
       test:
         description: |
           A flag indicating if the tests of the Xcode project scheme should run when using xcodebuild.
+          When CodeQL runs, the workflow builds without running tests regardless of this value.
         required: false
         type: boolean
         default: true
@@ -89,6 +92,7 @@ on:
       artifactname:
         description: |
           The name and path of the artifact that should be uploaded at the end of the build.
+          If not defined, test runs upload the resolved result bundle using its file name as the artifact name.
         required: false
         type: string
         default: ''
@@ -157,14 +161,116 @@ jobs:
           cp "$XCODE_PATH"/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/*.dylib "$XCODE_PATH/Toolchains/XcodeDefault.xctoolchain/usr/lib"
           sudo mkdir -p /usr/local/lib
           sudo cp "$XCODE_PATH"/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/host/*.dylib /usr/local/lib
+      - name: Resolve xcodebuild inputs
+        id: xcodebuild_inputs
+        env:
+          ARTIFACT_INPUT: ${{ inputs.artifactname }}
+          CODEQL_ENABLED: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
+          RESULT_BUNDLE_INPUT: ${{ inputs.resultBundle }}
+          SCHEME_INPUT: ${{ inputs.scheme }}
+          TEST_ENABLED: ${{ inputs.test }}
+        run: |
+          package_name=""
+
+          if [ -f Package.swift ]; then
+              package_dump="$(swift package dump-package)"
+              package_name="$(echo "$package_dump" | jq -r '.name')"
+          fi
+
+          if [ -n "$SCHEME_INPUT" ]; then
+              scheme="$SCHEME_INPUT"
+          elif [ -n "$package_name" ]; then
+              library_products="$(echo "$package_dump" | jq -c '[.products[] | select(.type | tostring | test("library")) | .name]')"
+              library_product_count="$(echo "$library_products" | jq 'length')"
+              if [ "$library_product_count" -gt 1 ]; then
+                  scheme="${package_name}-Package"
+              else
+                  scheme="$package_name"
+              fi
+          else
+              workspaces=()
+              while IFS= read -r workspace; do
+                  workspaces+=("$workspace")
+              done < <(find . -maxdepth 1 -name "*.xcworkspace" -type d | sort)
+
+              projects=()
+              while IFS= read -r project; do
+                  projects+=("$project")
+              done < <(find . -maxdepth 1 -name "*.xcodeproj" -type d | sort)
+
+              if [ "${#workspaces[@]}" -eq 1 ]; then
+                  container_args=(-workspace "${workspaces[0]#./}")
+              elif [ "${#workspaces[@]}" -gt 1 ]; then
+                  echo "::error::Multiple Xcode workspaces found. Set the scheme input explicitly."
+                  exit 1
+              elif [ "${#projects[@]}" -eq 1 ]; then
+                  container_args=(-project "${projects[0]#./}")
+              elif [ "${#projects[@]}" -gt 1 ]; then
+                  echo "::error::Multiple Xcode projects found. Set the scheme input explicitly."
+                  exit 1
+              else
+                  echo "::error::No Package.swift, .xcworkspace, or .xcodeproj found. Set path to the project directory."
+                  exit 1
+              fi
+
+              schemes="$(xcodebuild -list -json "${container_args[@]}" | ruby -rjson -e '
+                data = JSON.parse(STDIN.read)
+                puts(data.dig("workspace", "schemes") || data.dig("project", "schemes") || [])
+              ')"
+              scheme_count="$(printf '%s\n' "$schemes" | sed '/^$/d' | wc -l | tr -d ' ')"
+              if [ "$scheme_count" -ne 1 ]; then
+                  echo "::error::Expected exactly one shared Xcode scheme, found $scheme_count. Set the scheme input explicitly."
+                  printf '%s\n' "$schemes"
+                  exit 1
+              fi
+
+              scheme="$schemes"
+          fi
+
+          if [ -z "$RESULT_BUNDLE_INPUT" ]; then
+              if [ -n "$package_name" ]; then
+                  result_bundle="${package_name}.xcresult"
+              else
+                  result_bundle="${scheme}.xcresult"
+              fi
+          else
+              result_bundle="$RESULT_BUNDLE_INPUT"
+          fi
+
+          if [ -n "$ARTIFACT_INPUT" ]; then
+              artifact_path="$ARTIFACT_INPUT"
+          elif [ "$CODEQL_ENABLED" != "true" ] && [ "$TEST_ENABLED" = "true" ]; then
+              artifact_path="$result_bundle"
+          else
+              artifact_path=""
+          fi
+
+          if [ -n "$artifact_path" ]; then
+              normalized_artifact_path="${artifact_path%/}"
+              artifact_name="$(basename "$normalized_artifact_path")"
+              if [ -z "$artifact_name" ] || [ "$artifact_name" = "." ]; then
+                  artifact_name="artifact"
+              fi
+
+              artifact_name="$(printf '%s' "$artifact_name" | tr '/\\:*?"<>|' '-')"
+          else
+              artifact_name=""
+          fi
+
+          {
+              echo "scheme=$scheme"
+              echo "result_bundle=$result_bundle"
+              echo "artifact_path=$artifact_path"
+              echo "artifact_name=$artifact_name"
+          } >> "$GITHUB_OUTPUT"
       - name: Check available simulators
         env:
-          SCHEME: ${{ inputs.scheme }}
+          SCHEME: ${{ steps.xcodebuild_inputs.outputs.scheme }}
         run: |
           xcrun xcodebuild -scheme "$SCHEME" -showdestinations
       - name: Resolve dependencies
         env:
-          SCHEME: ${{ inputs.scheme }}
+          SCHEME: ${{ steps.xcodebuild_inputs.outputs.scheme }}
           SPM_DISABLE_PREBUILTS: ${{ inputs.spm-disable-prebuilts }}
         run: |
           prebuilt_args=()
@@ -182,26 +288,27 @@ jobs:
       - name: Build and test
         env:
           BUILD_CONFIG: ${{ inputs.buildConfig }}
+          CODEQL_ENABLED: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
           DESTINATION: ${{ inputs.destination }}
-          RESULT_BUNDLE_INPUT: ${{ inputs.resultBundle }}
-          SCHEME: ${{ inputs.scheme }}
+          RESULT_BUNDLE: ${{ steps.xcodebuild_inputs.outputs.result_bundle }}
+          SCHEME: ${{ steps.xcodebuild_inputs.outputs.scheme }}
           SPM_DISABLE_PREBUILTS: ${{ inputs.spm-disable-prebuilts }}
           SWIFT_VERSION: ${{ inputs.swiftVersion }}
           TEST_ENABLED: ${{ inputs.test }}
           TESTPLAN: ${{ inputs.testplan }}
         run: |
-          if [ "$TEST_ENABLED" = "true" ]; then
+          if [ "$CODEQL_ENABLED" = "true" ]; then
+              effective_test_enabled=false
+          else
+              effective_test_enabled="$TEST_ENABLED"
+          fi
+
+          if [ "$effective_test_enabled" = "true" ]; then
               xcode_command="test"
               code_coverage_args=(-enableCodeCoverage YES)
           else
               xcode_command="build"
               code_coverage_args=()
-          fi
-
-          if [ -z "$RESULT_BUNDLE_INPUT" ]; then
-              result_bundle="$SCHEME.xcresult"
-          else
-              result_bundle="$RESULT_BUNDLE_INPUT"
           fi
 
           if [ "$BUILD_CONFIG" = "Release" ]; then
@@ -218,7 +325,7 @@ jobs:
               other_swift_flags="$other_swift_flags -swift-version $SWIFT_VERSION"
           fi
 
-          if [ -n "$TESTPLAN" ]; then
+          if [ "$effective_test_enabled" = "true" ] && [ -n "$TESTPLAN" ]; then
               testplan_args=(-testPlan "$TESTPLAN")
           else
               testplan_args=()
@@ -238,7 +345,7 @@ jobs:
             "${testplan_args[@]}" \
             "${code_coverage_args[@]}" \
             -derivedDataPath ".derivedData" \
-            -resultBundlePath "$result_bundle" \
+            -resultBundlePath "$RESULT_BUNDLE" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             OTHER_SWIFT_FLAGS="$other_swift_flags" \
@@ -250,8 +357,8 @@ jobs:
         if: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
         uses: github/codeql-action/analyze@v4
       - name: Upload artifact
-        if: ${{ (success() || failure()) && inputs.artifactname != '' }}
+        if: ${{ (success() || failure()) && steps.xcodebuild_inputs.outputs.artifact_path != '' }}
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ inputs.artifactname }}
-          path: ${{ inputs.path }}/${{ inputs.artifactname }}
+          name: ${{ steps.xcodebuild_inputs.outputs.artifact_name }}
+          path: ${{ inputs.path }}/${{ steps.xcodebuild_inputs.outputs.artifact_path }}
