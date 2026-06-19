@@ -115,8 +115,6 @@ jobs:
   markdown-links:
     name: Check Markdown Links
     uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.2
-    with:
-      runs_on_labels: '["ubuntu-latest"]'
 ```
 
 ##### Run Periphery
