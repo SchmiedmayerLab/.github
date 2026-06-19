@@ -72,6 +72,7 @@ on:
       test:
         description: |
           A flag indicating if the tests of the Xcode project scheme should run when using xcodebuild.
+          When codeql is enabled, the workflow builds without running tests regardless of this value.
         required: false
         type: boolean
         default: true
@@ -182,6 +183,7 @@ jobs:
       - name: Build and test
         env:
           BUILD_CONFIG: ${{ inputs.buildConfig }}
+          CODEQL_ENABLED: ${{ inputs.codeql }}
           DESTINATION: ${{ inputs.destination }}
           RESULT_BUNDLE_INPUT: ${{ inputs.resultBundle }}
           SCHEME: ${{ inputs.scheme }}
@@ -190,7 +192,13 @@ jobs:
           TEST_ENABLED: ${{ inputs.test }}
           TESTPLAN: ${{ inputs.testplan }}
         run: |
-          if [ "$TEST_ENABLED" = "true" ]; then
+          if [ "$CODEQL_ENABLED" = "true" ]; then
+              effective_test_enabled=false
+          else
+              effective_test_enabled="$TEST_ENABLED"
+          fi
+
+          if [ "$effective_test_enabled" = "true" ]; then
               xcode_command="test"
               code_coverage_args=(-enableCodeCoverage YES)
           else
@@ -218,7 +226,7 @@ jobs:
               other_swift_flags="$other_swift_flags -swift-version $SWIFT_VERSION"
           fi
 
-          if [ -n "$TESTPLAN" ]; then
+          if [ "$effective_test_enabled" = "true" ] && [ -n "$TESTPLAN" ]; then
               testplan_args=(-testPlan "$TESTPLAN")
           else
               testplan_args=()
