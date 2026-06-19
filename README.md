@@ -303,20 +303,28 @@ jobs:
 ##### Build and Test with xcodebuild
 
 Use [`xcodebuild.yml`](.github/workflows/xcodebuild.yml) for Apple projects that need direct xcodebuild tests or builds.
+When `scheme` is omitted, the workflow infers the Swift package scheme from `Package.swift` or the only shared Xcode scheme in the selected `path`.
+Swift packages use the package name as the scheme, or `PackageName-Package` when the package defines multiple library products.
+Swift package result bundles use `PackageName.xcresult` in both cases.
+Test runs upload the resolved `.xcresult` bundle automatically; set `resultBundle` only when you need a custom bundle name.
 The workflow intentionally does not declare its own `permissions` block because its CodeQL path is optional.
 Callers that set `codeql: true` must grant `security-events: write`; normal build and test jobs can omit that permission.
 
 ```yml
 jobs:
-  build-and-test:
-    name: Build and Test Swift Package
+  app-tests:
+    name: Build and Test App
     permissions:
       contents: read
     uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.2
     with:
-      artifactname: TemplatePackage.xcresult
       runsonlabels: '["macOS", "self-hosted"]'
-      scheme: TemplatePackage
+  package-tests:
+    name: Build and Test Swift Package
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.2
+    with:
+      path: ExamplePackage
+      runsonlabels: '["macOS", "self-hosted"]'
 ```
 
 CodeQL analysis uses the same workflow with `codeql: true`.
@@ -340,6 +348,7 @@ jobs:
 
 Use [`firebase-emulators-exec.yml`](.github/workflows/firebase-emulators-exec.yml) for test or validation commands that must run while Firebase emulators are active.
 The `command` input is executed through `firebase emulators:exec` and can be any trusted shell command.
+Use `artifact_path` to upload command output such as an `.xcresult` bundle; the artifact name is inferred from the path.
 
 ```yml
 jobs:
@@ -348,6 +357,7 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.2
     with:
       command: bundle exec fastlane uitest
+      artifact_path: fastlane/test_output/UITests.xcresult
       firebase_emulator_import: ./firebase-export
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}

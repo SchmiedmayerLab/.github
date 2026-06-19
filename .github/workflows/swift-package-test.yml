@@ -67,7 +67,6 @@ jobs:
       destination: ${{ matrix.platform.destination }}
       buildConfig: ${{ matrix.config }}
       resultBundle: ${{ format('{0}-{1}-{2}.xcresult', inputs.package_name, matrix.platform.name, matrix.config) }}
-      artifactname: ${{ format('{0}-{1}-{2}.xcresult', inputs.package_name, matrix.platform.name, matrix.config) }}
 
   ui_tests:
     name: UI ${{ matrix.platform.name }} (${{ matrix.config }})
@@ -86,7 +85,6 @@ jobs:
       destination: ${{ matrix.platform.destination }}
       buildConfig: ${{ matrix.config }}
       resultBundle: ${{ format('{0}-{1}-{2}.xcresult', matrix.platform.scheme, matrix.platform.name, matrix.config) }}
-      artifactname: ${{ format('{0}-{1}-{2}.xcresult', matrix.platform.scheme, matrix.platform.name, matrix.config) }}
 
   package_tests_linux:
     name: Linux (${{ matrix.config }})

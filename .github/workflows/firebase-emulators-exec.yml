@@ -67,6 +67,13 @@ on:
         required: false
         type: boolean
         default: false
+      artifact_path:
+        description: |
+          File or directory path, relative to path, to upload after the command runs.
+          The artifact name is inferred from the final path component.
+        required: false
+        type: string
+        default: ''
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64:
         description: |
@@ -136,6 +143,27 @@ jobs:
           else
               firebase emulators:exec -c "$FIREBASE_JSON_PATH" "$COMMAND"
           fi
+      - name: Resolve artifact name
+        id: artifact
+        if: ${{ (success() || failure()) && inputs.artifact_path != '' }}
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifact_path }}
+        run: |
+          normalized_path="${ARTIFACT_PATH%/}"
+          artifact_name="$(basename "$normalized_path")"
+
+          if [ -z "$artifact_name" ] || [ "$artifact_name" = "." ]; then
+              artifact_name="artifact"
+          fi
+
+          artifact_name="$(printf '%s' "$artifact_name" | tr '/\\:*?"<>|' '-')"
+          echo "name=$artifact_name" >> "$GITHUB_OUTPUT"
+      - name: Upload artifact
+        if: ${{ (success() || failure()) && inputs.artifact_path != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.artifact.outputs.name }}
+          path: ${{ format('{0}/{1}', inputs.path, inputs.artifact_path) }}
       - name: Clean up Google application credentials
         if: always()
         run: |
