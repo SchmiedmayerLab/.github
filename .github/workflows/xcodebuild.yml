@@ -72,7 +72,7 @@ on:
       test:
         description: |
           A flag indicating if the tests of the Xcode project scheme should run when using xcodebuild.
-          When codeql is enabled, the workflow builds without running tests regardless of this value.
+          When CodeQL runs, the workflow builds without running tests regardless of this value.
         required: false
         type: boolean
         default: true
@@ -183,7 +183,7 @@ jobs:
       - name: Build and test
         env:
           BUILD_CONFIG: ${{ inputs.buildConfig }}
-          CODEQL_ENABLED: ${{ inputs.codeql }}
+          CODEQL_ENABLED: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
           DESTINATION: ${{ inputs.destination }}
           RESULT_BUNDLE_INPUT: ${{ inputs.resultBundle }}
           SCHEME: ${{ inputs.scheme }}

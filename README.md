@@ -323,7 +323,7 @@ jobs:
 
 CodeQL analysis uses the same workflow with `codeql: true`.
 Because GitHub sets unspecified token scopes to `none` when any explicit permission is declared, grant both `contents: read` and `security-events: write` on the calling job.
-When `codeql` is enabled, the workflow builds the project without running tests even though `test` defaults to `true`.
+When CodeQL runs on a GitHub-hosted runner, the workflow builds the project without running tests even though `test` defaults to `true`.
 
 ```yml
 jobs:
