@@ -79,7 +79,7 @@ jobs:
     runs-on: ${{ fromJson(inputs.runsonlabels) }}
     needs: build-xcarchive
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           token: ${{ secrets.access-token || github.token }}
       - uses: maxim-lobanov/setup-xcode@v1

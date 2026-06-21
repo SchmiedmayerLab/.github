@@ -50,7 +50,7 @@ jobs:
     name: Diagnose Swift Package API Breaking Changes
     runs-on: ${{ fromJson(inputs.runsonlabels) }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Fetch base branch
         run: git fetch origin "${{ inputs.branch }}:${{ inputs.branch }}"
