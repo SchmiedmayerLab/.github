@@ -60,7 +60,7 @@ on:
         default: 'platform=iOS Simulator,name=iPhone 17 Pro'
       setupSimulators:
         description: |
-          Flag indicating if all iOS simulators matching the `destination` input shoud be setup.
+          Flag indicating if all iOS simulators matching the `destination` input should be setup.
           Includes, e.g., password autofill functionality should be disabled [Deprecated].
         required: false
         type: boolean
@@ -222,7 +222,7 @@ on:
       GOOGLE_SERVICE_INFO_PLIST_BASE64:
         description: |
           The Base64 version of the GoogleService-Info.plist file that is used.
-          Replace the file found at googleserviceinfoplistpath if the arguemnt is set.
+          Replace the file found at googleserviceinfoplistpath if the argument is set.
         required: false
       GOOGLE_APPLICATION_CREDENTIALS_BASE64:
         description: |
@@ -261,7 +261,7 @@ jobs:
       - name: Cache .derivedData folder (Deprecated)
         if: ${{ inputs.cacheDerivedData }}
         run: |
-          echo "::warning::Caching of the .derivedData folder was removed and is deprecated. Plase stop using this option."
+          echo "::warning::Caching of the .derivedData folder was removed and is deprecated. Please stop using this option."
       - name: Cache Firebase Emulators
         if: ${{ runner.environment == 'github-hosted' && inputs.setupfirebaseemulator }}
         uses: actions/cache@v4
@@ -344,7 +344,7 @@ jobs:
       - name: Check available Simulators
         if: ${{ inputs.scheme != '' }}
         run: |
-          xcrun xcodebuild -scheme ${{ inputs.scheme }} -showdestinations
+          xcrun xcodebuild -scheme "${{ inputs.scheme }}" -showdestinations
       - name: Run custom command
         if: ${{ inputs.customcommand != '' }}
         run: ${{ inputs.customcommand }}
@@ -357,7 +357,7 @@ jobs:
         if: ${{ inputs.scheme != '' }}
         run: |
             xcodebuild \
-              -scheme ${{ inputs.scheme }} \
+              -scheme "${{ inputs.scheme }}" \
               -resolvePackageDependencies \
               -derivedDataPath ".derivedData" \
               ${{ inputs.spm-disable-prebuilts && '-IDEPackageEnablePrebuilts=NO' || '' }} \
