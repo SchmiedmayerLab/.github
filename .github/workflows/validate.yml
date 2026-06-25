@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   reuse_action:
     name: Check REUSE Compliance
@@ -28,14 +32,12 @@ jobs:
   markdown_link_check:
     name: Check Markdown Links
     uses: ./.github/workflows/markdown-links.yml
-    with:
-      runs_on_labels: '["ubuntu-latest"]'
   yamllint:
     name: Lint YAML
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up Python
         uses: actions/setup-python@v6
       - name: Install yamllint
@@ -47,7 +49,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Check trailing whitespace
         run: |
           if git grep -nI '[[:blank:]]$' -- .; then

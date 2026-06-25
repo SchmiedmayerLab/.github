@@ -47,7 +47,7 @@ jobs:
         working-directory: ${{ inputs.workingDirectory }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Create .env file
         run: |
           echo "${{ secrets.ENV_FILE }}" > ${{ inputs.workingDirectory }}/.env

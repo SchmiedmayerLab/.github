@@ -82,7 +82,7 @@ jobs:
         run: |
           echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
           echo "environment: ${{ inputs.environment }}"
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v6

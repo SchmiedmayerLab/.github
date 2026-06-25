@@ -90,7 +90,7 @@ jobs:
         working-directory: ${{ inputs.path }}
     environment: ${{ inputs.environment }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # This is GitHub's way of implementing ternary expressions (see https://docs.github.com/en/actions/learn-github-actions/expressions)
           token: ${{ secrets.CHECKOUT_TOKEN != '' && secrets.CHECKOUT_TOKEN || github.token }}

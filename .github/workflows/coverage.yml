@@ -39,7 +39,7 @@ jobs:
     name: Merge and Upload Coverage
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: maxim-lobanov/setup-xcode@v1
         with:
           xcode-version: 26.0.1
@@ -86,7 +86,7 @@ jobs:
               echo "::error::No coverage reports matched pattern: $COVERAGE_REPORTS"
               exit 1
             fi
-      - uses: SchmiedmayerLab/xccov2lcov@v1
+      - uses: schmiedmayerlab/xccov2lcov@v1
         if: ${{ inputs.coveragereports != '' }}
         with:
           xcresult: CodeCoverage.xcresult
