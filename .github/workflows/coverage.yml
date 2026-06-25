@@ -60,7 +60,10 @@ jobs:
         env:
           COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
-          read -r -a FILES <<< "$COVERAGE_REPORTS_LCOV"
+          shopt -s nullglob
+          # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+          # shellcheck disable=SC2206
+          FILES=( $COVERAGE_REPORTS_LCOV )
           args=()
           for file in "${FILES[@]}"; do
             # each x.lcov artifact gets downloaded to `x.lcov/x.lcov` (ie, into a folder with the same name);
@@ -73,13 +76,19 @@ jobs:
         env:
           COVERAGE_REPORTS: ${{ inputs.coveragereports }}
         run: |
-            read -r -a FILES <<< "$COVERAGE_REPORTS"
+            shopt -s nullglob
+            # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+            # shellcheck disable=SC2206
+            FILES=( $COVERAGE_REPORTS )
             NUM_INPUTS=${#FILES[@]}
             if [ "$NUM_INPUTS" -gt 1 ]; then
               xcrun xcresulttool merge "${FILES[@]}" --output-path CodeCoverage.xcresult
               rm -rf "${FILES[@]}"
-            else
+            elif [ "$NUM_INPUTS" -eq 1 ]; then
               mv "${FILES[0]}" CodeCoverage.xcresult
+            else
+              echo "::error::No coverage reports matched pattern: $COVERAGE_REPORTS"
+              exit 1
             fi
       - uses: schmiedmayerlab/xccov2lcov@v1
         if: ${{ inputs.coveragereports != '' }}
@@ -90,7 +99,10 @@ jobs:
         env:
           COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
-          read -r -a FILES <<< "$COVERAGE_REPORTS_LCOV"
+          shopt -s nullglob
+          # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+          # shellcheck disable=SC2206
+          FILES=( $COVERAGE_REPORTS_LCOV )
           args=()
           for file in "${FILES[@]}"; do
             # each x.lcov artifact gets downloaded to `x.lcov/x.lcov` (ie, into a folder with the same name);
