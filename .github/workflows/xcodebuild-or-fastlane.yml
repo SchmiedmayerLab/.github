@@ -454,6 +454,6 @@ jobs:
           security delete-keychain $RUNNER_TEMP/app-signing.keychain-db || true
           rm -rf ~/Library/MobileDevice/Provisioning\ Profiles || true
       - name: Clean up Google application credentials
-        if: ${{ inputs.fastlanelane != '' || failure() }}
+        if: ${{ (inputs.fastlanelane != '' && inputs.setupfirebaseemulator) || failure() }}
         run: |
           rm -rf $RUNNER_TEMP/google-application-credentials.json || true
