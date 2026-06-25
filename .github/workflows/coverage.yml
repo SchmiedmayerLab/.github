@@ -61,6 +61,8 @@ jobs:
           COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
           shopt -s nullglob
+          # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+          # shellcheck disable=SC2206
           FILES=( $COVERAGE_REPORTS_LCOV )
           args=()
           for file in "${FILES[@]}"; do
@@ -75,6 +77,8 @@ jobs:
           COVERAGE_REPORTS: ${{ inputs.coveragereports }}
         run: |
             shopt -s nullglob
+            # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+            # shellcheck disable=SC2206
             FILES=( $COVERAGE_REPORTS )
             NUM_INPUTS=${#FILES[@]}
             if [ "$NUM_INPUTS" -gt 1 ]; then
@@ -96,6 +100,8 @@ jobs:
           COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
           shopt -s nullglob
+          # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+          # shellcheck disable=SC2206
           FILES=( $COVERAGE_REPORTS_LCOV )
           args=()
           for file in "${FILES[@]}"; do
