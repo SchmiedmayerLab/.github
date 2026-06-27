@@ -63,7 +63,7 @@ jobs:
           cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
       - name: Cache Firebase emulators
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
           key: ${{ runner.os }}-${{ runner.arch }}-firebase-emulators-${{ hashFiles('~/.cache/firebase/emulators/**') }}
