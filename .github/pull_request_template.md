@@ -19,6 +19,6 @@
 *This section describes important information about the tests and why some elements might not be testable.*
 
 
-### Code of Conduct & Contributing Guidelines
+## Code of Conduct & Contributing Guidelines
 By creating and submitting this pull request, you agree to follow our [Code of Conduct](https://github.com/SchmiedmayerLab/.github/blob/main/CODE_OF_CONDUCT.md) and [Contributing Guidelines](https://github.com/SchmiedmayerLab/.github/blob/main/CONTRIBUTING.md):
 - [ ] I agree to follow the [Code of Conduct](https://github.com/SchmiedmayerLab/.github/blob/main/CODE_OF_CONDUCT.md) and [Contributing Guidelines](https://github.com/SchmiedmayerLab/.github/blob/main/CONTRIBUTING.md).
