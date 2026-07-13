@@ -47,7 +47,10 @@ jobs:
         run: |
             xcodebuild -version
             swift --version
-      - uses: actions/download-artifact@v8
+      - name: Download coverage artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/coverage-artifacts
       - name: Install lcov
         if: ${{ inputs.coveragereports_lcov != '' }}
         run: |
@@ -58,38 +61,75 @@ jobs:
       - name: Merge lcov coverage reports
         if: ${{ inputs.coveragereports_lcov != '' && inputs.coveragereports == '' }}
         env:
+          ARTIFACTS_DIRECTORY: ${{ runner.temp }}/coverage-artifacts
           COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
           shopt -s nullglob
+          cd "$ARTIFACTS_DIRECTORY"
+
           # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
           # shellcheck disable=SC2206
           FILES=( $COVERAGE_REPORTS_LCOV )
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::No lcov reports matched pattern: $COVERAGE_REPORTS_LCOV"
+            exit 1
+          fi
+
           args=()
           for file in "${FILES[@]}"; do
-            # each x.lcov artifact gets downloaded to `x.lcov/x.lcov` (ie, into a folder with the same name);
-            # we need to take this into account when constructing the paths.
-            args+=(-a "$file/$(basename "$file")")
+            if [ -f "$file" ]; then
+              report="$file"
+            elif [ -f "$file/$(basename "$file")" ]; then
+              report="$file/$(basename "$file")"
+            else
+              echo "::error::$file does not contain an lcov report"
+              exit 1
+            fi
+            args+=(-a "$report")
           done
-          lcov "${args[@]}" -o info.lcov
+          lcov "${args[@]}" -o "$GITHUB_WORKSPACE/info.lcov"
       - name: Merge xcresult coverage reports
         if: ${{ inputs.coveragereports != '' }}
         env:
+          ARTIFACTS_DIRECTORY: ${{ runner.temp }}/coverage-artifacts
           COVERAGE_REPORTS: ${{ inputs.coveragereports }}
         run: |
-            shopt -s nullglob
-            # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
-            # shellcheck disable=SC2206
-            FILES=( $COVERAGE_REPORTS )
-            NUM_INPUTS=${#FILES[@]}
-            if [ "$NUM_INPUTS" -gt 1 ]; then
-              xcrun xcresulttool merge "${FILES[@]}" --output-path CodeCoverage.xcresult
-              rm -rf "${FILES[@]}"
-            elif [ "$NUM_INPUTS" -eq 1 ]; then
-              mv "${FILES[0]}" CodeCoverage.xcresult
-            else
-              echo "::error::No coverage reports matched pattern: $COVERAGE_REPORTS"
+          shopt -s nullglob
+
+          # download-artifact extracts a lone artifact directly into the destination instead of creating a named wrapper.
+          if [ -f "$ARTIFACTS_DIRECTORY/Info.plist" ] && [ -d "$ARTIFACTS_DIRECTORY/Data" ]; then
+            read -r -a REQUESTED <<< "$COVERAGE_REPORTS"
+            if [ "${#REQUESTED[@]}" -ne 1 ]; then
+              echo "::error::Expected one coverage report for the flattened artifact layout"
               exit 1
             fi
+
+            mv "$ARTIFACTS_DIRECTORY" "$GITHUB_WORKSPACE/CodeCoverage.xcresult"
+            exit 0
+          fi
+
+          cd "$ARTIFACTS_DIRECTORY"
+
+          # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
+          # shellcheck disable=SC2206
+          FILES=( $COVERAGE_REPORTS )
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::No coverage reports matched pattern: $COVERAGE_REPORTS"
+            exit 1
+          fi
+
+          for file in "${FILES[@]}"; do
+            if [ ! -f "$file/Info.plist" ] || [ ! -d "$file/Data" ]; then
+              echo "::error::$file is not an xcresult bundle"
+              exit 1
+            fi
+          done
+
+          if [ "${#FILES[@]}" -gt 1 ]; then
+            xcrun xcresulttool merge "${FILES[@]}" --output-path "$GITHUB_WORKSPACE/CodeCoverage.xcresult"
+          else
+            mv "${FILES[0]}" "$GITHUB_WORKSPACE/CodeCoverage.xcresult"
+          fi
       - uses: schmiedmayerlab/xccov2lcov@v1
         if: ${{ inputs.coveragereports != '' }}
         with:
@@ -97,20 +137,34 @@ jobs:
       - name: Merge xcresult and lcov
         if: ${{ inputs.coveragereports_lcov != '' && inputs.coveragereports != '' }}
         env:
+          ARTIFACTS_DIRECTORY: ${{ runner.temp }}/coverage-artifacts
           COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
           shopt -s nullglob
+          cd "$ARTIFACTS_DIRECTORY"
+
           # Intentional word splitting + glob expansion of the space-separated patterns (globbing is the point here).
           # shellcheck disable=SC2206
           FILES=( $COVERAGE_REPORTS_LCOV )
+          if [ "${#FILES[@]}" -eq 0 ]; then
+            echo "::error::No lcov reports matched pattern: $COVERAGE_REPORTS_LCOV"
+            exit 1
+          fi
+
           args=()
           for file in "${FILES[@]}"; do
-            # each x.lcov artifact gets downloaded to `x.lcov/x.lcov` (ie, into a folder with the same name);
-            # we need to take this into account when constructing the paths.
-            args+=(-a "$file/$(basename "$file")")
+            if [ -f "$file" ]; then
+              report="$file"
+            elif [ -f "$file/$(basename "$file")" ]; then
+              report="$file/$(basename "$file")"
+            else
+              echo "::error::$file does not contain an lcov report"
+              exit 1
+            fi
+            args+=(-a "$report")
           done
-          lcov -a info.lcov "${args[@]}" -o coverage_combined.lcov
-          mv coverage_combined.lcov info.lcov
+          lcov -a "$GITHUB_WORKSPACE/info.lcov" "${args[@]}" -o "$GITHUB_WORKSPACE/coverage_combined.lcov"
+          mv "$GITHUB_WORKSPACE/coverage_combined.lcov" "$GITHUB_WORKSPACE/info.lcov"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:
