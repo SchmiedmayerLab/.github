@@ -114,6 +114,15 @@ on:
         required: false
         type: boolean
         default: false
+    outputs:
+      result_bundle:
+        description: |
+          The resolved result bundle path passed to xcodebuild.
+        value: ${{ jobs.build_and_test.outputs.result_bundle }}
+      artifact_name:
+        description: |
+          The resolved name of the uploaded build artifact.
+        value: ${{ jobs.build_and_test.outputs.artifact_name }}
     secrets:
       CHECKOUT_TOKEN:
         description: |
@@ -124,6 +133,9 @@ jobs:
   build_and_test:
     name: ${{ inputs.job_name }}
     runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    outputs:
+      result_bundle: ${{ steps.xcodebuild_inputs.outputs.result_bundle }}
+      artifact_name: ${{ steps.xcodebuild_inputs.outputs.artifact_name }}
     defaults:
       run:
         working-directory: ${{ inputs.path }}
