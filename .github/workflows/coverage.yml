@@ -100,11 +100,11 @@ jobs:
           if [ -f "$ARTIFACTS_DIRECTORY/Info.plist" ] && [ -d "$ARTIFACTS_DIRECTORY/Data" ]; then
             read -r -a REQUESTED <<< "$COVERAGE_REPORTS"
             if [ "${#REQUESTED[@]}" -ne 1 ]; then
-              echo "::error::Expected one coverage report for the flattened artifact layout"
+              echo "::error::Expected one coverage report for the flattened artifact layout, received: $COVERAGE_REPORTS"
               exit 1
             fi
 
-            mv "$ARTIFACTS_DIRECTORY" "$GITHUB_WORKSPACE/CodeCoverage.xcresult"
+            cp -R "$ARTIFACTS_DIRECTORY" "$GITHUB_WORKSPACE/CodeCoverage.xcresult"
             exit 0
           fi
 
