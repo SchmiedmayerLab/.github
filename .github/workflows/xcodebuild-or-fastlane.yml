@@ -270,7 +270,7 @@ jobs:
           key: ${{ runner.os }}-${{ runner.arch }}-firebase-emulators-${{ hashFiles('~/.cache/firebase/emulators/**') }}
       - name: Setup NodeJS
         if: ${{ runner.environment == 'github-hosted' && inputs.setupfirebaseemulator }}
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
       - name: Setup Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setupfirebaseemulator }}
         uses: actions/setup-java@v5
