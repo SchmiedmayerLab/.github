@@ -87,7 +87,7 @@ jobs:
             fi
             args+=(-a "$report")
           done
-          lcov "${args[@]}" -o "$GITHUB_WORKSPACE/info.lcov"
+          lcov --no-function-coverage "${args[@]}" -o "$GITHUB_WORKSPACE/info.lcov"
       - name: Merge xcresult coverage reports
         if: ${{ inputs.coveragereports != '' }}
         env:
@@ -163,7 +163,10 @@ jobs:
             fi
             args+=(-a "$report")
           done
-          lcov -a "$GITHUB_WORKSPACE/info.lcov" "${args[@]}" -o "$GITHUB_WORKSPACE/coverage_combined.lcov"
+          lcov --no-function-coverage \
+            -a "$GITHUB_WORKSPACE/info.lcov" \
+            "${args[@]}" \
+            -o "$GITHUB_WORKSPACE/coverage_combined.lcov"
           mv "$GITHUB_WORKSPACE/coverage_combined.lcov" "$GITHUB_WORKSPACE/info.lcov"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
