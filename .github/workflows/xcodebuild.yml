@@ -275,11 +275,6 @@ jobs:
               echo "artifact_path=$artifact_path"
               echo "artifact_name=$artifact_name"
           } >> "$GITHUB_OUTPUT"
-      - name: Check available simulators
-        env:
-          SCHEME: ${{ steps.xcodebuild_inputs.outputs.scheme }}
-        run: |
-          xcrun xcodebuild -scheme "$SCHEME" -showdestinations
       - name: Resolve dependencies
         env:
           SCHEME: ${{ steps.xcodebuild_inputs.outputs.scheme }}
@@ -289,7 +284,6 @@ jobs:
           if [ "$SPM_DISABLE_PREBUILTS" = "true" ]; then
               prebuilt_args=(-IDEPackageEnablePrebuilts=NO)
           fi
-
           xcodebuild \
             -scheme "$SCHEME" \
             -resolvePackageDependencies \
@@ -297,6 +291,11 @@ jobs:
             "${prebuilt_args[@]}" \
           | xcbeautify \
           || true
+      - name: Check available simulators
+        env:
+          SCHEME: ${{ steps.xcodebuild_inputs.outputs.scheme }}
+        run: |
+          xcrun xcodebuild -scheme "$SCHEME" -derivedDataPath ".derivedData" -showdestinations
       - name: Build and test
         env:
           BUILD_CONFIG: ${{ inputs.buildConfig }}
