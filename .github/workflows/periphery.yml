@@ -64,6 +64,7 @@ jobs:
           periphery scan \
             --relative-results \
             --format github-actions \
+            --clean-build \
             ${{ inputs.strict && '--strict' || '' }} \
             -- \
             -derivedDataPath ".derivedData" \
