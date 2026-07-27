@@ -66,6 +66,7 @@ jobs:
             --format github-actions \
             ${{ inputs.strict && '--strict' || '' }} \
             -- \
+            -derivedDataPath ".derivedData" \
             -skipPackagePluginValidation \
             -skipMacroValidation
       - name: Clean up Periphery
