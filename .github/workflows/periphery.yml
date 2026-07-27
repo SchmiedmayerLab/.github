@@ -35,6 +35,11 @@ on:
         required: false
         type: boolean
         default: true
+      extra-build-args:
+        description: |
+          Additional arguments to pass to the underlying build tool (xcodebuild or `swift build`)
+        required: false
+        type: string
 
 permissions:
   contents: read
@@ -71,7 +76,8 @@ jobs:
             ${{ inputs.strict && '--strict' || '' }} \
             -- \
             -skipPackagePluginValidation \
-            -skipMacroValidation
+            -skipMacroValidation \
+            ${{ inputs.extra-build-args }}
       - name: Clean up Periphery
         if: always()
         run: rm -rf ~/Library/Caches/com.github.peripheryapp
