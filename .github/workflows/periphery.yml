@@ -88,6 +88,10 @@ jobs:
           echo "Clearing DerivedData for '$name' ($project_dir)"
           for dir in "$derived_data/$name"-*/; do
             plist="${dir}info.plist"
+            if [ ! -f "$plist" ]; then
+              echo "Skipping $dir (no ownership metadata)"
+              continue
+            fi
             if [ -f "$plist" ]; then
               # For Xcode projects this is the path of the '.xcodeproj'/'.xcworkspace' bundle,
               # for Swift packages the path of the directory containing the Package.swift.
