@@ -273,7 +273,7 @@ jobs:
         uses: actions/setup-node@v7
       - name: Setup Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setupfirebaseemulator }}
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v5.6.0
         with:
           distribution: 'microsoft'
           java-version: '17'
@@ -325,7 +325,7 @@ jobs:
           echo -n "${{ secrets.GOOGLE_SERVICE_INFO_PLIST_BASE64 }}" | base64 --decode -o "${{ inputs.googleserviceinfoplistpath }}"
       - name: Initialize CodeQL
         if: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
-        uses: github/codeql-action/init@v4
+        uses: github/codeql-action/init@v4.37.3
         with:
           languages: swift
           db-location: '${{ inputs.path }}/.codeql'
@@ -442,7 +442,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
       - name: Perform CodeQL Analysis
         if: ${{ runner.environment == 'github-hosted' && inputs.codeql }}
-        uses: github/codeql-action/analyze@v4
+        uses: github/codeql-action/analyze@v4.37.3
       - name: Upload artifact
         if: ${{ (success() || failure()) && inputs.artifactname != '' }}
         uses: actions/upload-artifact@v7
