@@ -19,10 +19,10 @@ on:
         default: '24'
       npmVersion:
         description: |
-          npm version spec to install before dependency resolution.
+          Exact npm version to install before dependency resolution.
         required: false
         type: string
-        default: '11'
+        default: '11.19.0'
       working-directory:
         description: |
           The working directory where the project is located. Defaults to $GITHUB_WORKSPACE.
@@ -76,7 +76,13 @@ jobs:
       - name: Set up npm
         env:
           NPM_VERSION: ${{ inputs.npmVersion }}
-        run: npm install --global "npm@$NPM_VERSION"
+        run: |
+          if [[ ! "$NPM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "npmVersion must be an exact semantic version."
+            exit 1
+          fi
+
+          npm install --global --ignore-scripts "npm@$NPM_VERSION"
       - name: Install Node.js dependencies
         run: npm ci
       - name: Cache Firebase emulators
