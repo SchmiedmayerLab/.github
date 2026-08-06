@@ -17,6 +17,12 @@ on:
         required: false
         type: string
         default: '24'
+      npmVersion:
+        description: |
+          npm version spec to install before dependency resolution and publishing.
+        required: false
+        type: string
+        default: '11'
       cacheDependencyPath:
         description: |
           Node cache dependency path. Required only if package-lock.json is not in the root.
@@ -74,6 +80,10 @@ jobs:
           cache-dependency-path: ${{ inputs.cacheDependencyPath }}
           node-version: ${{ inputs.nodeVersion }}
           registry-url: 'https://registry.npmjs.org'
+      - name: Set up npm
+        env:
+          NPM_VERSION: ${{ inputs.npmVersion }}
+        run: npm install --global "npm@$NPM_VERSION"
       - name: Install dependencies
         run: npm ci
       - name: Set version

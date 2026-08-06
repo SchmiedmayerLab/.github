@@ -17,6 +17,12 @@ on:
         required: false
         type: string
         default: '24'
+      npmVersion:
+        description: |
+          npm version spec to install before dependency resolution.
+        required: false
+        type: string
+        default: '11'
       working-directory:
         description: |
           The working directory where the project is located. Defaults to $GITHUB_WORKSPACE.
@@ -67,6 +73,10 @@ jobs:
           node-version: ${{ inputs.nodeVersion }}
           cache: 'npm'
           cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
+      - name: Set up npm
+        env:
+          NPM_VERSION: ${{ inputs.npmVersion }}
+        run: npm install --global "npm@$NPM_VERSION"
       - name: Install Node.js dependencies
         run: npm ci
       - name: Cache Firebase emulators

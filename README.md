@@ -488,7 +488,7 @@ jobs:
 
 ##### Publish npm Package
 
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
+[`npm-publish.yml`](.github/workflows/npm-publish.yml) installs the requested npm 11 release, sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
 Use it from release workflows that have an npm token available. Callers publishing workspaces should set `workspaces: true`; workspace packages can use a `version` lifecycle script to synchronize internal dependency versions before publishing.
 
 ```yml
@@ -507,7 +507,7 @@ jobs:
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must lock the expected `firebase-tools` version in their development dependencies, and the workflow verifies that version before testing with Java 21.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should install npm 11 before running `npm ci`, `npm test`, and Codecov upload. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must lock the expected `firebase-tools` version in their development dependencies, and the workflow verifies that version before testing with Java 21.
 
 ```yml
 jobs:
