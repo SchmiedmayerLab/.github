@@ -507,7 +507,7 @@ jobs:
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; the workflow pins the Firebase CLI and uses Java 21.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must lock the expected `firebase-tools` version in their development dependencies, and the workflow verifies that version before testing with Java 21.
 
 ```yml
 jobs:

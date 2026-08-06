@@ -31,7 +31,7 @@ on:
         default: false
       firebase-tools-version:
         description: |
-          Firebase CLI version to install when Firebase Emulator support is enabled.
+          Firebase CLI version expected in the caller's lockfile when Firebase Emulator support is enabled.
         required: false
         type: string
         default: '15.26.0'
@@ -67,37 +67,54 @@ jobs:
           node-version: ${{ inputs.nodeVersion }}
           cache: 'npm'
           cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
+      - name: Install Node.js dependencies
+        run: npm ci
       - name: Cache Firebase emulators
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
-          key: ${{ runner.os }}-${{ runner.arch }}-firebase-emulators-${{ hashFiles('~/.cache/firebase/emulators/**') }}
+          key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}
       - name: Set up Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         uses: actions/setup-java@v5
         with:
           distribution: 'microsoft'
           java-version: '21'
-      - name: Install Firebase CLI tools
+      - name: Verify Firebase CLI tools
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         env:
           FIREBASE_TOOLS_VERSION: ${{ inputs.firebase-tools-version }}
-        run: npm install --global "firebase-tools@$FIREBASE_TOOLS_VERSION"
-      - name: Install Node.js dependencies
-        run: npm ci
+        run: |
+          FIREBASE_BINARY="node_modules/.bin/firebase"
+          if [ ! -x "$FIREBASE_BINARY" ]; then
+            echo "firebase-tools must be installed in the caller's lockfile."
+            exit 1
+          fi
+
+          INSTALLED_VERSION="$("$FIREBASE_BINARY" --version)"
+          if [ "$INSTALLED_VERSION" != "$FIREBASE_TOOLS_VERSION" ]; then
+            echo "Expected firebase-tools $FIREBASE_TOOLS_VERSION, found $INSTALLED_VERSION."
+            exit 1
+          fi
       - name: Run the tests
+        if: ${{ !inputs.setup-firebase-emulator }}
+        run: npm test
+      - name: Run the tests with Firebase Emulator support
+        if: ${{ inputs.setup-firebase-emulator }}
         env:
           GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
         run: |
-          if ${{ inputs.setup-firebase-emulator }}; then
-            if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" ]; then
-              printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" | base64 --decode > "$RUNNER_TEMP/google-application-credentials.json"
-              export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
-            fi
+          if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" ]; then
+            printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" | base64 --decode > "$RUNNER_TEMP/google-application-credentials.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
           fi
 
           npm test
+      - name: Clean up Google application credentials
+        if: ${{ always() && inputs.setup-firebase-emulator }}
+        working-directory: ${{ github.workspace }}
+        run: rm -f "$RUNNER_TEMP/google-application-credentials.json"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         if: ${{ always() }}
@@ -105,7 +122,3 @@ jobs:
           token: ${{ secrets.token }}
           working-directory: ${{ inputs.working-directory }}
           fail_ci_if_error: true
-      - name: Clean up Google application credentials
-        if: ${{ always() && inputs.setup-firebase-emulator }}
-        working-directory: ${{ github.workspace }}
-        run: rm -f "$RUNNER_TEMP/google-application-credentials.json"
