@@ -54,16 +54,20 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish-package:
     name: Publish npm Package
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: ${{ inputs.workingDirectory }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           cache: 'npm'
@@ -73,22 +77,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Set version
+        env:
+          NPM_CONFIG_IGNORE_SCRIPTS: 'false'
+          PACKAGE_VERSION: ${{ inputs.packageVersion }}
+          WORKSPACES: ${{ inputs.workspaces }}
         run: |
-          if [ "${{ inputs.workspaces }}" = "true" ]; then
-            # Update version in all workspace packages
-            npm version --no-git-tag-version --workspaces ${{ inputs.packageVersion }}
+          if [ "$WORKSPACES" = "true" ]; then
+            npm version --no-git-tag-version --workspaces "$PACKAGE_VERSION"
           else
-            # Update version in root package only
-            npm version --no-git-tag-version --tag ${{ inputs.packageTag }} ${{ inputs.packageVersion }}
+            npm version --no-git-tag-version "$PACKAGE_VERSION"
           fi
       - name: Build
         run: npm run build
       - name: Publish
-        run: |
-          if [ "${{ inputs.workspaces }}" = "true" ]; then
-            npm publish --workspaces --provenance --access public --tag ${{ inputs.packageTag }}
-          else
-            npm publish --provenance --access public --tag ${{ inputs.packageTag }}
-          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_TAG: ${{ inputs.packageTag }}
+          WORKSPACES: ${{ inputs.workspaces }}
+        run: |
+          if [ "$WORKSPACES" = "true" ]; then
+            npm publish --workspaces --provenance --access public --tag "$PACKAGE_TAG"
+          else
+            npm publish --provenance --access public --tag "$PACKAGE_TAG"
+          fi

@@ -29,6 +29,12 @@ on:
         required: false
         type: boolean
         default: false
+      firebase-tools-version:
+        description: |
+          Firebase CLI version to install when Firebase Emulator support is enabled.
+        required: false
+        type: string
+        default: '15.26.0'
     secrets:
       token:
         description: |
@@ -47,14 +53,14 @@ jobs:
   testandcoverage:
     name: Test npm Package and Upload Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@v7
-      - name: Check environment
-        run: |
-            echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
+        with:
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
@@ -72,23 +78,26 @@ jobs:
         uses: actions/setup-java@v5
         with:
           distribution: 'microsoft'
-          java-version: '17'
+          java-version: '21'
       - name: Install Firebase CLI tools
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
-        run: npm install -g firebase-tools
+        env:
+          FIREBASE_TOOLS_VERSION: ${{ inputs.firebase-tools-version }}
+        run: npm install --global "firebase-tools@$FIREBASE_TOOLS_VERSION"
       - name: Install Node.js dependencies
         run: npm ci
       - name: Run the tests
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
         run: |
           if ${{ inputs.setup-firebase-emulator }}; then
-              echo -n "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}" | base64 -d > "$RUNNER_TEMP/google-application-credentials.json"
+            if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" ]; then
+              printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" | base64 --decode > "$RUNNER_TEMP/google-application-credentials.json"
               export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
-              echo "Stored the Google application credentials at $GOOGLE_APPLICATION_CREDENTIALS"
+            fi
           fi
 
           npm test
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         if: ${{ always() }}
@@ -97,6 +106,6 @@ jobs:
           working-directory: ${{ inputs.working-directory }}
           fail_ci_if_error: true
       - name: Clean up Google application credentials
-        if: ${{ always() }}
-        run: |
-          rm -rf "$RUNNER_TEMP/google-application-credentials.json" || true
+        if: ${{ always() && inputs.setup-firebase-emulator }}
+        working-directory: ${{ github.workspace }}
+        run: rm -f "$RUNNER_TEMP/google-application-credentials.json"

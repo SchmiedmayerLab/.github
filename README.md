@@ -488,14 +488,17 @@ jobs:
 
 ##### Publish npm Package
 
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, builds the package, and publishes it to npm.
-Use it from release workflows that have an npm token available.
+[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
+Use it from release workflows that have an npm token available. Callers publishing workspaces should set `workspaces: true`; workspace packages can use a `version` lifecycle script to synchronize internal dependency versions before publishing.
 
 ```yml
 jobs:
   npm-publish:
     name: Publish npm Package
     uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.3
+    permissions:
+      contents: read
+      id-token: write
     with:
       packageVersion: 0.1.0
     secrets:
@@ -504,7 +507,7 @@ jobs:
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; the workflow pins the Firebase CLI and uses Java 21.
 
 ```yml
 jobs:
