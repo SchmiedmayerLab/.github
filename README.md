@@ -507,7 +507,7 @@ jobs:
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should install the reproducible npm 11.19.0 default before running `npm ci`, `npm test`, and Codecov upload. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; the workflow verifies Firebase CLI 15.26.0 by default, and callers must lock that matching `firebase-tools` version in `package-lock.json` before testing with Java 21.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov. The workflow uses the npm version bundled with the selected Node.js release by default; callers that need a specific npm release can provide an exact version such as `npmVersion: '11.19.0'`. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; the workflow verifies Firebase CLI 15.26.0 by default, and callers must lock that matching `firebase-tools` version in `package-lock.json` before testing with Java 21.
 
 ```yml
 jobs:

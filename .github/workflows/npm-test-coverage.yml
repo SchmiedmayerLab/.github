@@ -19,10 +19,11 @@ on:
         default: '24'
       npmVersion:
         description: |
-          Exact npm version to install before dependency resolution.
+          Optional exact npm version to install before dependency resolution.
+          Uses the npm version bundled with Node.js when omitted.
         required: false
         type: string
-        default: '11.19.0'
+        default: ''
       working-directory:
         description: |
           The working directory where the project is located. Defaults to $GITHUB_WORKSPACE.
@@ -74,6 +75,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
       - name: Set up npm
+        if: ${{ inputs.npmVersion != '' }}
         env:
           NPM_VERSION: ${{ inputs.npmVersion }}
         run: |

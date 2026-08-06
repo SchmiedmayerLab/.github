@@ -19,10 +19,11 @@ on:
         default: '24'
       npmVersion:
         description: |
-          Exact npm version to install before dependency resolution and publishing.
+          Optional exact npm version to install before dependency resolution and publishing.
+          Uses the npm version bundled with Node.js when omitted.
         required: false
         type: string
-        default: '11.19.0'
+        default: ''
       cacheDependencyPath:
         description: |
           Node cache dependency path. Required only if package-lock.json is not in the root.
@@ -81,6 +82,7 @@ jobs:
           node-version: ${{ inputs.nodeVersion }}
           registry-url: 'https://registry.npmjs.org'
       - name: Set up npm
+        if: ${{ inputs.npmVersion != '' }}
         env:
           NPM_VERSION: ${{ inputs.npmVersion }}
         run: |
