@@ -30,6 +30,13 @@ on:
         required: false
         type: string
         default: '.'
+      coverage-files:
+        description: |
+          Optional comma-separated coverage report paths passed to Codecov.
+          Disables automatic report discovery when supplied.
+        required: false
+        type: string
+        default: ''
       setup-firebase-emulator:
         description: |
           Set up the Firebase Emulator.
@@ -140,4 +147,6 @@ jobs:
         with:
           token: ${{ secrets.token }}
           working-directory: ${{ inputs.working-directory }}
+          files: ${{ inputs.coverage-files }}
+          disable_search: ${{ inputs.coverage-files != '' }}
           fail_ci_if_error: true

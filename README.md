@@ -507,13 +507,15 @@ jobs:
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov. The workflow uses the npm version bundled with the selected Node.js release by default; callers that need a specific npm release can provide an exact version such as `npmVersion: '12.0.2'`. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache. An exact `firebase-tools-version` can be provided when a caller wants an additional policy check.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov. The workflow uses the npm version bundled with the selected Node.js release by default; callers that need a specific npm release can provide an exact version such as `npmVersion: '12.0.2'`. Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache. An exact `firebase-tools-version` can be provided when a caller wants an additional policy check.
 
 ```yml
 jobs:
   npm-test:
     name: Test npm Package and Upload Coverage
     uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.3
+    with:
+      coverage-files: coverage/lcov.info
     secrets:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```
