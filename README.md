@@ -550,8 +550,9 @@ The workflow automatically runs `build`, `pack:check`, and `pack:lint` when thos
 ##### Build and Deploy npm Project Pages
 
 Use [`npm-pages.yml`](.github/workflows/npm-pages.yml) when an npm project can build its complete Pages artifact with `npm run pages:build`.
-The script must create `deploy/index.html`; all routing and framework-specific build decisions stay in the caller repository.
-Node.js and npm versions are inferred from `.nvmrc` and `packageManager`.
+By default, the script must create `deploy/index.html`; when `artifactPath` is set, it must create `<artifactPath>/index.html`.
+All routing and framework-specific build decisions stay in the caller repository.
+By default, Node.js is read from `.nvmrc` and npm from the exact root `packageManager` entry.
 
 ```yml
 permissions:
