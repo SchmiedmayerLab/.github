@@ -103,7 +103,7 @@ jobs:
       - name: Verify npm supports trusted publishing
         run: |
           ACTIVE_NODE_VERSION="$(node --version)"
-          if [[ ! "$ACTIVE_NODE_VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
+          if [[ ! "$ACTIVE_NODE_VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "Unable to parse Node.js version: $ACTIVE_NODE_VERSION"
             exit 1
           fi
@@ -116,7 +116,7 @@ jobs:
           fi
 
           ACTIVE_NPM_VERSION="$(npm --version)"
-          if [[ ! "$ACTIVE_NPM_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)(-.+)?$ ]]; then
+          if [[ ! "$ACTIVE_NPM_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
             echo "Unable to parse npm version: $ACTIVE_NPM_VERSION"
             exit 1
           fi
