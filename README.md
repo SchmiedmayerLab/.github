@@ -542,7 +542,7 @@ Manual release callers pass their dispatch input as `packageVersion`.
 
 For the first publication of a new package, temporarily pass its package name in `bootstrapPackages` and expose a short-lived granular `NPM_TOKEN` with read/write scope access and **Bypass two-factor authentication** enabled.
 The token is available only to the bootstrap step.
-After publication, the workflow summary provides the interactive `npm trust` commands required to authorize `deployment.yml`; remove the token after a subsequent OIDC publication succeeds.
+After publication, the workflow summary provides the interactive `npm trust` commands required to authorize `deployment.yml` with npm 11.15.0 or later; remove the token after a subsequent OIDC publication succeeds.
 
 Repositories may define an optional `release:prepare` script for package-specific preparation after versions are synchronized.
 The workflow automatically runs `build`, `pack:check`, and `pack:lint` when those scripts exist.
