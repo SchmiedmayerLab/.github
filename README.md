@@ -58,7 +58,9 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 |---|---|
 | [`firebase-deploy.yml`](#deploy-firebase) | Deploy Firebase projects. |
 | [`nextjs-github-pages.yml`](#deploy-nextjs-site) | Build and deploy a static Next.js site to GitHub Pages. |
+| [`npm-pages.yml`](#build-and-deploy-npm-project-pages) | Build and optionally deploy an npm project to GitHub Pages. |
 | [`npm-publish.yml`](#publish-npm-package) | Publish an npm package. |
+| [`npm-release.yml`](#publish-a-fixed-version-npm-release) | Safely publish a fixed-version npm package or workspace release. |
 | [`npm-test-coverage.yml`](#test-npm-package-and-upload-coverage) | Test an npm package and upload coverage to Codecov. |
 
 #### Containers
@@ -516,6 +518,54 @@ For packages that do not yet exist on npm, run the caller once with the followin
 
 The bootstrap refuses packages that already exist.
 After it succeeds, configure a GitHub Actions trusted publisher for every package using the organization, repository, and top-level caller workflow filename, then remove the token and `bootstrapWithToken`.
+
+##### Publish a Fixed-Version npm Release
+
+Use [`npm-release.yml`](.github/workflows/npm-release.yml) for repositories that publish one package or a fixed-version npm workspace collection.
+The workflow reads a published GitHub release tag, Node.js from `.nvmrc`, and npm from the exact `packageManager` entry in `package.json`, so release-event callers normally provide no inputs.
+It validates bare semantic versions, orders workspace packages by runtime dependencies, synchronizes internal dependency versions, skips versions already present on npm, publishes existing packages through OIDC, and verifies the registry state.
+
+Keep the top-level caller at `.github/workflows/deployment.yml`.
+npm validates the caller workflow name when a reusable workflow performs the publication, and every Trusted Publisher must authorize `deployment.yml`.
+
+```yml
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-release.yml@v0.4
+```
+
+Manual release callers pass their dispatch input as `packageVersion`.
+
+For the first publication of a new package, temporarily pass its package name in `bootstrapPackages` and expose a short-lived granular `NPM_TOKEN` with read/write scope access and **Bypass two-factor authentication** enabled.
+The token is available only to the bootstrap step.
+After publication, the workflow summary provides the interactive `npm trust` commands required to authorize `deployment.yml`; remove the token after a subsequent OIDC publication succeeds.
+
+Repositories may define an optional `release:prepare` script for package-specific preparation after versions are synchronized.
+The workflow automatically runs `build`, `pack:check`, and `pack:lint` when those scripts exist.
+
+##### Build and Deploy npm Project Pages
+
+Use [`npm-pages.yml`](.github/workflows/npm-pages.yml) when an npm project can build its complete Pages artifact with `npm run pages:build`.
+The script must create `deploy/index.html`; all routing and framework-specific build decisions stay in the caller repository.
+Node.js and npm versions are inferred from `.nvmrc` and `packageManager`.
+
+```yml
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  pages:
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-pages.yml@v0.4
+```
+
+Set `deploy: false` to exercise the complete Pages build in pull-request CI without uploading or deploying the artifact.
+`nodeVersionFile` and `artifactPath` are available only for repositories that cannot follow the default conventions.
 
 ##### Test npm Package and Upload Coverage
 
