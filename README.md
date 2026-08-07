@@ -488,7 +488,7 @@ jobs:
 
 ##### Publish npm Package
 
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) installs the requested npm 11 release, sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
+[`npm-publish.yml`](.github/workflows/npm-publish.yml) optionally installs an exact stable npm version selected by the caller; when omitted, it uses the npm version bundled with the selected Node.js release. It sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
 Use it from release workflows that have an npm token available. Callers publishing workspaces should set `workspaces: true`; workspace packages can use a `version` lifecycle script to synchronize internal dependency versions before publishing.
 
 ```yml

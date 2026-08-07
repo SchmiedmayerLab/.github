@@ -19,8 +19,9 @@ on:
         default: '24'
       npmVersion:
         description: |
-          Optional exact npm version to install before dependency resolution.
+          Optional exact stable npm version to install before dependency resolution.
           Uses the npm version bundled with Node.js when omitted.
+          Values must be selected in trusted caller workflow code.
         required: false
         type: string
         default: ''
@@ -87,8 +88,8 @@ jobs:
         env:
           NPM_VERSION: ${{ inputs.npmVersion }}
         run: |
-          if [[ ! "$NPM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "npmVersion must be an exact semantic version."
+          if [[ ! "$NPM_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "npmVersion must be an exact stable semantic version without leading zeroes."
             exit 1
           fi
 
