@@ -57,10 +57,8 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | Workflow | Use |
 |---|---|
 | [`firebase-deploy.yml`](#deploy-firebase) | Deploy Firebase projects. |
-| [`nextjs-github-pages.yml`](#deploy-nextjs-site) | Build and deploy a static Next.js site to GitHub Pages. |
 | [`npm-pages.yml`](#build-and-deploy-npm-project-pages) | Build and deploy an npm project to GitHub Pages. |
-| [`npm-publish.yml`](#publish-npm-package) | Publish an npm package. |
-| [`npm-release.yml`](#publish-a-fixed-version-npm-release) | Safely publish a fixed-version npm package or workspace release. |
+| [`npm-publish.yml`](#publish-npm-packages) | Safely publish a fixed-version npm package or workspace release. |
 | [`npm-test-coverage.yml`](#test-npm-package-and-upload-coverage) | Test an npm package and upload coverage to Codecov. |
 
 #### Containers
@@ -472,56 +470,9 @@ jobs:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
 ```
 
-##### Deploy Next.js Site
+##### Publish npm Packages
 
-Use [`nextjs-github-pages.yml`](.github/workflows/nextjs-github-pages.yml) for static Next.js sites that publish to GitHub Pages.
-
-```yml
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-jobs:
-  pages:
-    name: Deploy Next.js Site
-    uses: SchmiedmayerLab/.github/.github/workflows/nextjs-github-pages.yml@v0.3
-```
-
-##### Publish npm Package
-
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
-It uses npm Trusted Publishing by default and requires Node.js 22.14.0 or newer, npm 11.5.1 or newer, and `id-token: write` in both the caller and reusable workflow.
-Set `workspaces: true` for npm workspaces and provide `npmVersion` only when the bundled npm version must be replaced with an exact stable version.
-
-```yml
-jobs:
-  npm-publish:
-    name: Publish npm Package
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.3
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      packageVersion: 0.1.0
-```
-
-For packages that do not yet exist on npm, run the caller once with the following additions:
-
-```yml
-    with:
-      bootstrapWithToken: true
-      packageVersion: 0.1.0
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-The bootstrap refuses packages that already exist.
-After it succeeds, configure a GitHub Actions trusted publisher for every package using the organization, repository, and top-level caller workflow filename, then remove the token and `bootstrapWithToken`.
-
-##### Publish a Fixed-Version npm Release
-
-Use [`npm-release.yml`](.github/workflows/npm-release.yml) for repositories that publish one package or a fixed-version npm workspace collection.
+Use [`npm-publish.yml`](.github/workflows/npm-publish.yml) for repositories that publish one package or a fixed-version npm workspace collection.
 The workflow reads a published GitHub release tag, Node.js from `.nvmrc`, and npm from the exact `packageManager` entry in `package.json`, so release-event callers normally provide no inputs.
 It validates bare semantic versions, orders workspace packages by runtime dependencies, synchronizes internal dependency versions, skips versions already present on npm, publishes existing packages through OIDC, and verifies the registry state.
 
@@ -535,7 +486,7 @@ permissions:
 
 jobs:
   publish:
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-release.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.4
 ```
 
 Manual release callers pass their dispatch input as `packageVersion`.
@@ -546,6 +497,9 @@ After publication, the workflow summary provides the interactive `npm trust` com
 
 Repositories may define an optional `release:prepare` script for package-specific preparation after versions are synchronized.
 The workflow automatically runs `build`, `pack:check`, and `pack:lint` when those scripts exist.
+Callers pinned to v0.3 continue to use the earlier interface unchanged.
+When adopting v0.4, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
+Replace `bootstrapWithToken: true` with explicit package names in `bootstrapPackages`, or use `*` only when every unpublished package is intentionally being bootstrapped.
 
 ##### Build and Deploy npm Project Pages
 
@@ -567,10 +521,15 @@ jobs:
 
 Call `npm run pages:build` directly in pull-request CI so that build jobs do not receive deployment permissions.
 `nodeVersionFile` and `artifactPath` are available only for repositories that cannot follow the default conventions.
+This convention also supports static Next.js exports, replacing the former framework-specific workflow.
+Existing callers can remain on `nextjs-github-pages.yml@v0.3` until their repository provides `pages:build` and adopts `npm-pages.yml@v0.4`.
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov. The workflow uses the npm version bundled with the selected Node.js release by default; callers that need a specific npm release can provide an exact version such as `npmVersion: '12.0.2'`. Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov.
+It reads Node.js from `.nvmrc` and npm from the exact `packageManager` entry in the selected project's `package.json`, so the standard caller does not provide runtime versions.
+Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov.
+Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache.
 
 ```yml
 jobs:

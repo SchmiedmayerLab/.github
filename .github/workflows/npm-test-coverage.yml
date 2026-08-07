@@ -11,17 +11,16 @@ name: Test npm Package and Upload Coverage
 on:
   workflow_call:
     inputs:
-      nodeVersion:
+      nodeVersionFile:
         description: |
-          Node.js version spec to use in SemVer notation.
+          Repository-relative Node.js version file.
         required: false
         type: string
-        default: '24'
+        default: '.nvmrc'
       npmVersion:
         description: |
-          Optional exact stable npm version to install before dependency resolution.
-          Uses the npm version bundled with Node.js when omitted.
-          Values must be selected in trusted caller workflow code.
+          Optional exact stable npm version override.
+          Defaults to the exact packageManager version in package.json.
         required: false
         type: string
         default: ''
@@ -73,20 +72,40 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: ${{ inputs.nodeVersion }}
+          node-version-file: ${{ inputs.nodeVersionFile }}
           cache: 'npm'
           cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
-      - name: Set up npm
-        if: ${{ inputs.npmVersion != '' }}
+      - name: Use the repository npm version
         env:
-          NPM_VERSION: ${{ inputs.npmVersion }}
+          NPM_VERSION_OVERRIDE: ${{ inputs.npmVersion }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
         run: |
+          set -euo pipefail
+          NPM_VERSION="$NPM_VERSION_OVERRIDE"
+          if [ -z "$NPM_VERSION" ]; then
+            NPM_VERSION="$(node --input-type=module -e '
+              import { readFileSync } from "node:fs";
+              import { resolve } from "node:path";
+              const { packageManager } = JSON.parse(
+                readFileSync(resolve(process.env.WORKING_DIRECTORY, "package.json"), "utf8"),
+              );
+              const match = /^npm@((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/.exec(packageManager ?? "");
+              if (!match) throw new Error("package.json must declare an exact npm packageManager version.");
+              console.log(match[1]);
+            ')"
+          fi
+
           if [[ ! "$NPM_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
             echo "npmVersion must be an exact stable semantic version without leading zeroes."
             exit 1
           fi
 
           npm install --global --ignore-scripts "npm@$NPM_VERSION"
+          INSTALLED_NPM_VERSION="$(npm --version)"
+          if [ "$INSTALLED_NPM_VERSION" != "$NPM_VERSION" ]; then
+            echo "Expected npm $NPM_VERSION, but installed $INSTALLED_NPM_VERSION."
+            exit 1
+          fi
       - name: Install Node.js dependencies
         run: npm ci
       - name: Cache Firebase emulators
