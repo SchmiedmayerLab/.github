@@ -1,0 +1,104 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Build and Deploy npm Project Pages
+
+on:
+  workflow_call:
+    inputs:
+      nodeVersionFile:
+        description: Repository-relative Node.js version file.
+        required: false
+        type: string
+        default: ".nvmrc"
+      artifactPath:
+        description: Directory produced by npm run pages:build.
+        required: false
+        type: string
+        default: "deploy"
+    outputs:
+      pageUrl:
+        description: URL of the deployed GitHub Pages site.
+        value: ${{ jobs.deploy.outputs.pageUrl }}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: ${{ inputs.nodeVersionFile }}
+          cache: npm
+          cache-dependency-path: "**/package-lock.json"
+      - name: Use the repository npm version
+        run: |
+          set -euo pipefail
+          NPM_VERSION="$(node --input-type=module -e '
+            import { readFileSync } from "node:fs";
+            const { packageManager } = JSON.parse(readFileSync("package.json", "utf8"));
+            const match = /^npm@((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/.exec(packageManager ?? "");
+            if (!match) throw new Error("package.json must declare an exact npm packageManager version.");
+            console.log(match[1]);
+          ')"
+          # npm verifies the registry tarball integrity; the caller pins the exact version.
+          npm install --global --ignore-scripts "npm@$NPM_VERSION"
+          INSTALLED_NPM_VERSION="$(npm --version)"
+          if [ "$INSTALLED_NPM_VERSION" != "$NPM_VERSION" ]; then
+            echo "Expected npm $NPM_VERSION, but installed $INSTALLED_NPM_VERSION."
+            exit 1
+          fi
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Pages artifact
+        run: npm run pages:build
+      - name: Verify Pages artifact
+        env:
+          ARTIFACT_PATH: ${{ inputs.artifactPath }}
+        run: |
+          set -euo pipefail
+          if [ ! -d "$ARTIFACT_PATH" ] || [ ! -f "$ARTIFACT_PATH/index.html" ]; then
+            echo "npm run pages:build must create $ARTIFACT_PATH/index.html."
+            exit 1
+          fi
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ inputs.artifactPath }}
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      pageUrl: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

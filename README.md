@@ -57,8 +57,8 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | Workflow | Use |
 |---|---|
 | [`firebase-deploy.yml`](#deploy-firebase) | Deploy Firebase projects. |
-| [`nextjs-github-pages.yml`](#deploy-nextjs-site) | Build and deploy a static Next.js site to GitHub Pages. |
-| [`npm-publish.yml`](#publish-npm-package) | Publish an npm package. |
+| [`npm-pages.yml`](#build-and-deploy-npm-project-pages) | Build and deploy an npm project to GitHub Pages. |
+| [`npm-publish.yml`](#publish-npm-packages) | Safely publish a fixed-version npm package or workspace release. |
 | [`npm-test-coverage.yml`](#test-npm-package-and-upload-coverage) | Test an npm package and upload coverage to Codecov. |
 
 #### Containers
@@ -88,7 +88,7 @@ Use it for repositories that maintain their own workflows.
 jobs:
   actionlint:
     name: Lint GitHub Actions Workflows
-    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.4
     with:
       runs_on_labels: '["ubuntu-latest"]'
 ```
@@ -102,7 +102,7 @@ Use it for JavaScript and TypeScript projects with `npm run lint:ci`.
 jobs:
   eslint:
     name: Run ESLint
-    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.4
 ```
 
 ##### Check Markdown Links
@@ -115,7 +115,7 @@ Linkspector can map diagnostics to the pull request diff.
 jobs:
   markdown-links:
     name: Check Markdown Links
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.4
     permissions:
       contents: read
       pull-requests: read
@@ -130,7 +130,7 @@ Use it for Swift packages and Xcode projects that can be scanned from the reposi
 jobs:
   periphery:
     name: Run Periphery
-    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.4
 ```
 
 ##### Check REUSE Compliance
@@ -142,7 +142,7 @@ Use it for repositories that follow the REUSE specification.
 jobs:
   reuse:
     name: Check REUSE Compliance
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.4
 ```
 
 ##### Run SwiftLint
@@ -154,7 +154,7 @@ Use it for Swift repositories that define SwiftLint rules.
 jobs:
   swiftlint:
     name: Run SwiftLint
-    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.4
 ```
 
 #### Swift and Apple Platforms
@@ -168,7 +168,7 @@ Use it after test jobs that upload coverage artifacts.
 jobs:
   coverage:
     name: Merge and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.4
     with:
       coveragereports: ResultBundle1.xcresult ResultBundle2.xcresult
     secrets:
@@ -189,7 +189,7 @@ permissions:
 jobs:
   docc:
     name: Deploy DocC Documentation
-    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.4
     with:
       scheme: ExamplePackage
 ```
@@ -203,7 +203,7 @@ Use it for Swift packages that can rely on automatic metadata detection.
 jobs:
   api-breaking-changes:
     name: Diagnose Swift API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.4
 ```
 
 ##### Diagnose Swift Package API Breaking Changes
@@ -215,7 +215,7 @@ Use it when another workflow already knows the package metadata.
 jobs:
   package-breaking-changes:
     name: Diagnose Swift Package API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.4
     with:
       library_products: '["ExamplePackage"]'
       platform_name: ios
@@ -231,7 +231,7 @@ It detects package metadata, runs tests, uploads coverage when available, and ru
 jobs:
   swift-package-ci:
     name: Swift Package CI
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.4
     secrets: inherit
 ```
 
@@ -244,11 +244,11 @@ Use it as a setup job before lower-level Swift package workflows.
 jobs:
   setup:
     name: Set Up Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.4
   test:
     name: Test Swift Package
     needs: setup
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.4
     with:
       package_name: ${{ needs.setup.outputs.package_name }}
       scheme: ${{ needs.setup.outputs.scheme }}
@@ -265,7 +265,7 @@ Use it when package metadata is already available from `swift-package-setup.yml`
 jobs:
   analyze:
     name: Analyze Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.4
     with:
       library_products: '["ExamplePackage"]'
       platform_name: ios
@@ -281,7 +281,7 @@ Use it when package metadata and platform matrices are provided explicitly.
 jobs:
   test:
     name: Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.4
     with:
       package_name: ExamplePackage
       scheme: ExamplePackage
@@ -301,7 +301,7 @@ Use it for Linux Swift package tests or simple SwiftPM test jobs.
 jobs:
   swift-test:
     name: Run Swift Tests
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.4
 ```
 
 ##### Build and Test with xcodebuild
@@ -320,12 +320,12 @@ jobs:
     name: Build and Test App
     permissions:
       contents: read
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.4
     with:
       runsonlabels: '["macOS", "self-hosted"]'
   package-tests:
     name: Build and Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.4
     with:
       path: ExamplePackage
       runsonlabels: '["macOS", "self-hosted"]'
@@ -342,7 +342,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.4
     with:
       codeql: true
       scheme: TemplatePackage
@@ -358,7 +358,7 @@ Use `artifact_path` to upload command output such as an `.xcresult` bundle; the 
 jobs:
   firebase-ui-tests:
     name: Run UI Tests with Firebase Emulator
-    uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.4
     with:
       command: bundle exec fastlane uitest
       artifact_path: fastlane/test_output/UITests.xcresult
@@ -380,7 +380,7 @@ jobs:
     name: Deploy Xcode Project
     permissions:
       contents: read
-    uses: SchmiedmayerLab/.github/.github/workflows/xcode-deploy.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcode-deploy.yml@v0.4
     with:
       command: >-
         bundle exec fastlane deploy environment:"staging"
@@ -408,7 +408,7 @@ Use it for binary distribution pipelines that package Apple platform archives.
 jobs:
   xcarchive:
     name: Build XCArchive
-    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.4
     with:
       workspaceFile: example.xcworkspace
       xcArchiveName: ExampleKit
@@ -424,7 +424,7 @@ Use [`xcframework.yml`](.github/workflows/xcframework.yml) to package XCArchive 
 jobs:
   xcframework:
     name: Build XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.4
     with:
       workspaceFile: example.xcworkspace
       xcFrameworkName: ExampleKit
@@ -445,7 +445,7 @@ permissions:
 jobs:
   release-xcframework:
     name: Release XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.4
     with:
       version: v0.2
     secrets:
@@ -463,16 +463,50 @@ Use it for Firebase Hosting, Functions, Firestore rules, or other Firebase deplo
 jobs:
   firebase:
     name: Deploy Firebase
-    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.4
     with:
       arguments: --only hosting
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
 ```
 
-##### Deploy Next.js Site
+##### Publish npm Packages
 
-Use [`nextjs-github-pages.yml`](.github/workflows/nextjs-github-pages.yml) for static Next.js sites that publish to GitHub Pages.
+Use [`npm-publish.yml`](.github/workflows/npm-publish.yml) for repositories that publish one package or a fixed-version npm workspace collection.
+The workflow reads a published GitHub release tag, Node.js from `.nvmrc`, and npm from the exact `packageManager` entry in `package.json`, so release-event callers normally provide no inputs.
+It validates bare semantic versions, orders workspace packages by runtime dependencies, synchronizes internal dependency versions, skips versions already present on npm, publishes existing packages through OIDC, and verifies the registry state.
+
+Keep the top-level caller at `.github/workflows/deployment.yml`.
+npm validates the caller workflow name when a reusable workflow performs the publication, and every Trusted Publisher must authorize `deployment.yml`.
+
+```yml
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.4
+```
+
+Manual release callers pass their dispatch input as `packageVersion`.
+
+For the first publication of a new package, temporarily pass its package name in `bootstrapPackages` and expose a short-lived granular `NPM_TOKEN` with read/write scope access and **Bypass two-factor authentication** enabled.
+The token is available only to the bootstrap step.
+After publication, the workflow summary provides the interactive `npm trust` commands required to authorize `deployment.yml` with npm 11.15.0 or later; remove the token after a subsequent OIDC publication succeeds.
+
+Repositories may define an optional `release:prepare` script for package-specific preparation after versions are synchronized.
+The workflow automatically runs `build`, `pack:check`, and `pack:lint` when those scripts exist.
+Callers pinned to an earlier release continue to use the earlier interface unchanged.
+When adopting v0.4, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
+Replace `bootstrapWithToken: true` with explicit package names in `bootstrapPackages`, or use `*` only when every unpublished package is intentionally being bootstrapped.
+
+##### Build and Deploy npm Project Pages
+
+Use [`npm-pages.yml`](.github/workflows/npm-pages.yml) when an npm project can build its complete Pages artifact with `npm run pages:build`.
+By default, the script must create `deploy/index.html`; when `artifactPath` is set, it must create `<artifactPath>/index.html`.
+All routing and framework-specific build decisions stay in the caller repository.
+By default, Node.js is read from `.nvmrc` and npm from the exact root `packageManager` entry.
 
 ```yml
 permissions:
@@ -482,50 +516,26 @@ permissions:
 
 jobs:
   pages:
-    name: Deploy Next.js Site
-    uses: SchmiedmayerLab/.github/.github/workflows/nextjs-github-pages.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-pages.yml@v0.4
 ```
 
-##### Publish npm Package
-
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
-It uses npm Trusted Publishing by default and requires Node.js 22.14.0 or newer, npm 11.5.1 or newer, and `id-token: write` in both the caller and reusable workflow.
-Set `workspaces: true` for npm workspaces and provide `npmVersion` only when the bundled npm version must be replaced with an exact stable version.
-
-```yml
-jobs:
-  npm-publish:
-    name: Publish npm Package
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.3
-    permissions:
-      contents: read
-      id-token: write
-    with:
-      packageVersion: 0.1.0
-```
-
-For packages that do not yet exist on npm, run the caller once with the following additions:
-
-```yml
-    with:
-      bootstrapWithToken: true
-      packageVersion: 0.1.0
-    secrets:
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-The bootstrap refuses packages that already exist.
-After it succeeds, configure a GitHub Actions trusted publisher for every package using the organization, repository, and top-level caller workflow filename, then remove the token and `bootstrapWithToken`.
+Call `npm run pages:build` directly in pull-request CI so that build jobs do not receive deployment permissions.
+`nodeVersionFile` and `artifactPath` are available only for repositories that cannot follow the default conventions.
+This convention also supports static Next.js exports, replacing the former framework-specific workflow.
+Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.4`.
 
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov. The workflow uses the npm version bundled with the selected Node.js release by default; callers that need a specific npm release can provide an exact version such as `npmVersion: '12.0.2'`. Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov.
+It reads Node.js from `.nvmrc` and npm from the exact `packageManager` entry in the selected project's `package.json`, so the standard caller does not provide runtime versions.
+Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov.
+Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache.
 
 ```yml
 jobs:
   npm-test:
     name: Test npm Package and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.4
     with:
       coverage-files: coverage/lcov.info
     secrets:
@@ -546,7 +556,7 @@ permissions:
 jobs:
   docker:
     name: Build and Push Docker Image
-    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.4
     with:
       imageName: schmiedmayerlab/example
 ```
@@ -560,7 +570,7 @@ Use it for projects where integration tests run against local services.
 jobs:
   docker-compose:
     name: Test Docker Compose Stack
-    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.4
     with:
       testscript: scripts/smoke-test.sh
 ```
@@ -579,7 +589,7 @@ permissions:
 jobs:
   release-tags:
     name: Tag Action Release
-    uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.4
     secrets:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
     with:
@@ -595,7 +605,7 @@ Use it when another job needs the formatted notes from the `releasenotes` output
 jobs:
   release-notes:
     name: Format Release Notes
-    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.3
+    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.4
     with:
       release-tag: ${{ github.ref_name }}
       repository: ${{ github.repository }}
