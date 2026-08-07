@@ -488,8 +488,9 @@ jobs:
 
 ##### Publish npm Package
 
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) optionally installs an exact stable npm version selected by the caller; when omitted, it uses the npm version bundled with the selected Node.js release. It sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
-Use it from release workflows that have an npm token available. Callers publishing workspaces should set `workspaces: true`; workspace packages can use a `version` lifecycle script to synchronize internal dependency versions before publishing.
+[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
+It uses npm Trusted Publishing by default and requires Node.js 22.14.0 or newer, npm 11.5.1 or newer, and `id-token: write` in both the caller and reusable workflow.
+Set `workspaces: true` for npm workspaces and provide `npmVersion` only when the bundled npm version must be replaced with an exact stable version.
 
 ```yml
 jobs:
@@ -501,9 +502,20 @@ jobs:
       id-token: write
     with:
       packageVersion: 0.1.0
+```
+
+For packages that do not yet exist on npm, run the caller once with the following additions:
+
+```yml
+    with:
+      bootstrapWithToken: true
+      packageVersion: 0.1.0
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
+
+The bootstrap refuses packages that already exist.
+After it succeeds, configure a GitHub Actions trusted publisher for every package using the organization, repository, and top-level caller workflow filename, then remove the token and `bootstrapWithToken`.
 
 ##### Test npm Package and Upload Coverage
 
