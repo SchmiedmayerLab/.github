@@ -58,7 +58,7 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 |---|---|
 | [`firebase-deploy.yml`](#deploy-firebase) | Deploy Firebase projects. |
 | [`nextjs-github-pages.yml`](#deploy-nextjs-site) | Build and deploy a static Next.js site to GitHub Pages. |
-| [`npm-pages.yml`](#build-and-deploy-npm-project-pages) | Build and optionally deploy an npm project to GitHub Pages. |
+| [`npm-pages.yml`](#build-and-deploy-npm-project-pages) | Build and deploy an npm project to GitHub Pages. |
 | [`npm-publish.yml`](#publish-npm-package) | Publish an npm package. |
 | [`npm-release.yml`](#publish-a-fixed-version-npm-release) | Safely publish a fixed-version npm package or workspace release. |
 | [`npm-test-coverage.yml`](#test-npm-package-and-upload-coverage) | Test an npm package and upload coverage to Codecov. |
@@ -564,7 +564,7 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/npm-pages.yml@v0.4
 ```
 
-Set `deploy: false` to exercise the complete Pages build in pull-request CI without uploading or deploying the artifact.
+Call `npm run pages:build` directly in pull-request CI so that build jobs do not receive deployment permissions.
 `nodeVersionFile` and `artifactPath` are available only for repositories that cannot follow the default conventions.
 
 ##### Test npm Package and Upload Coverage
