@@ -17,6 +17,14 @@ on:
         required: false
         type: string
         default: '24'
+      npmVersion:
+        description: |
+          Optional exact stable npm version to install before dependency resolution and publishing.
+          Uses the npm version bundled with Node.js when omitted.
+          Values must be selected in trusted caller workflow code.
+        required: false
+        type: string
+        default: ''
       cacheDependencyPath:
         description: |
           Node cache dependency path. Required only if package-lock.json is not in the root.
@@ -46,49 +54,167 @@ on:
         required: false
         type: boolean
         default: false
+      bootstrapWithToken:
+        description: |
+          Use NPM_TOKEN for the initial publication of packages that do not yet exist on npm.
+          Leave false for normal releases through npm Trusted Publishing (OIDC).
+        required: false
+        type: boolean
+        default: false
     secrets:
       NPM_TOKEN:
         description: |
-          Used to perform authenticated operations against the npm registry.
-        required: true
+          One-time npm access token used only when bootstrapWithToken is true.
+        required: false
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   publish-package:
     name: Publish npm Package
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ${{ inputs.workingDirectory }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           cache: 'npm'
           cache-dependency-path: ${{ inputs.cacheDependencyPath }}
           node-version: ${{ inputs.nodeVersion }}
           registry-url: 'https://registry.npmjs.org'
+      - name: Set up npm
+        if: ${{ inputs.npmVersion != '' }}
+        env:
+          NPM_VERSION: ${{ inputs.npmVersion }}
+        run: |
+          if [[ ! "$NPM_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "npmVersion must be an exact stable semantic version without leading zeroes."
+            exit 1
+          fi
+
+          npm install --global --ignore-scripts "npm@$NPM_VERSION"
+      - name: Verify npm supports trusted publishing
+        run: |
+          ACTIVE_NODE_VERSION="$(node --version)"
+          if [[ ! "$ACTIVE_NODE_VERSION" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Unable to parse Node.js version: $ACTIVE_NODE_VERSION"
+            exit 1
+          fi
+
+          NODE_MAJOR="${BASH_REMATCH[1]}"
+          NODE_MINOR="${BASH_REMATCH[2]}"
+          if (( NODE_MAJOR < 22 || (NODE_MAJOR == 22 && NODE_MINOR < 14) )); then
+            echo "Node.js 22.14.0 or newer is required for trusted publishing. Found $ACTIVE_NODE_VERSION."
+            exit 1
+          fi
+
+          ACTIVE_NPM_VERSION="$(npm --version)"
+          if [[ ! "$ACTIVE_NPM_VERSION" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            echo "Unable to parse npm version: $ACTIVE_NPM_VERSION"
+            exit 1
+          fi
+
+          NPM_MAJOR="${BASH_REMATCH[1]}"
+          NPM_MINOR="${BASH_REMATCH[2]}"
+          NPM_PATCH="${BASH_REMATCH[3]}"
+          if (( NPM_MAJOR < 11 || (NPM_MAJOR == 11 && NPM_MINOR < 5) || (NPM_MAJOR == 11 && NPM_MINOR == 5 && NPM_PATCH < 1) )); then
+            echo "npm 11.5.1 or newer is required for trusted publishing. Found $ACTIVE_NPM_VERSION."
+            exit 1
+          fi
       - name: Install dependencies
         run: npm ci
       - name: Set version
+        env:
+          NPM_CONFIG_IGNORE_SCRIPTS: 'false'
+          PACKAGE_VERSION: ${{ inputs.packageVersion }}
+          WORKSPACES: ${{ inputs.workspaces }}
         run: |
-          if [ "${{ inputs.workspaces }}" = "true" ]; then
-            # Update version in all workspace packages
-            npm version --no-git-tag-version --workspaces ${{ inputs.packageVersion }}
+          if [ "$WORKSPACES" = "true" ]; then
+            npm version --no-git-tag-version --workspaces "$PACKAGE_VERSION"
           else
-            # Update version in root package only
-            npm version --no-git-tag-version --tag ${{ inputs.packageTag }} ${{ inputs.packageVersion }}
+            npm version --no-git-tag-version "$PACKAGE_VERSION"
           fi
       - name: Build
         run: npm run build
-      - name: Publish
-        run: |
-          if [ "${{ inputs.workspaces }}" = "true" ]; then
-            npm publish --workspaces --provenance --access public --tag ${{ inputs.packageTag }}
-          else
-            npm publish --provenance --access public --tag ${{ inputs.packageTag }}
-          fi
+      - name: Verify token bootstrap
+        if: ${{ inputs.bootstrapWithToken }}
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          WORKSPACES: ${{ inputs.workspaces }}
+        run: |
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN is required when bootstrapWithToken is true."
+            exit 1
+          fi
+
+          if [ "$WORKSPACES" = "true" ]; then
+            PACKAGE_NAMES="$(npm query .workspace --json | node --input-type=module -e '
+              let input = "";
+              for await (const chunk of process.stdin) input += chunk;
+              const packages = JSON.parse(input);
+              for (const packageMetadata of packages) {
+                if (!packageMetadata.name) throw new Error("Every workspace must have a package name.");
+                console.log(packageMetadata.name);
+              }
+            ')"
+          else
+            PACKAGE_NAMES="$(node --input-type=module -e '
+              import { readFile } from "node:fs/promises";
+              const packageMetadata = JSON.parse(await readFile("package.json", "utf8"));
+              if (!packageMetadata.name) throw new Error("package.json must have a package name.");
+              console.log(packageMetadata.name);
+            ')"
+          fi
+
+          if [ -z "$PACKAGE_NAMES" ]; then
+            echo "No packages were found for token bootstrap."
+            exit 1
+          fi
+
+          while IFS= read -r PACKAGE_NAME; do
+            set +e
+            VIEW_OUTPUT="$(npm view "$PACKAGE_NAME" name 2>&1)"
+            VIEW_STATUS=$?
+            set -e
+
+            if [ "$VIEW_STATUS" -eq 0 ]; then
+              echo "$PACKAGE_NAME already exists on npm. Configure Trusted Publishing and leave bootstrapWithToken false."
+              exit 1
+            fi
+
+            if [[ "$VIEW_OUTPUT" != *"E404"* && "$VIEW_OUTPUT" != *"404 Not Found"* ]]; then
+              echo "Unable to confirm that $PACKAGE_NAME is unpublished:"
+              echo "$VIEW_OUTPUT"
+              exit 1
+            fi
+          done <<< "$PACKAGE_NAMES"
+      - name: Publish with npm Trusted Publishing
+        if: ${{ !inputs.bootstrapWithToken }}
+        env:
+          PACKAGE_TAG: ${{ inputs.packageTag }}
+          WORKSPACES: ${{ inputs.workspaces }}
+        run: |
+          if [ "$WORKSPACES" = "true" ]; then
+            npm publish --workspaces --provenance --access public --tag "$PACKAGE_TAG"
+          else
+            npm publish --provenance --access public --tag "$PACKAGE_TAG"
+          fi
+      - name: Bootstrap packages with npm token
+        if: ${{ inputs.bootstrapWithToken }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PACKAGE_TAG: ${{ inputs.packageTag }}
+          WORKSPACES: ${{ inputs.workspaces }}
+        run: |
+          if [ "$WORKSPACES" = "true" ]; then
+            npm publish --workspaces --provenance --access public --tag "$PACKAGE_TAG"
+          else
+            npm publish --provenance --access public --tag "$PACKAGE_TAG"
+          fi

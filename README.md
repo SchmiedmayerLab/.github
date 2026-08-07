@@ -488,29 +488,46 @@ jobs:
 
 ##### Publish npm Package
 
-[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, builds the package, and publishes it to npm.
-Use it from release workflows that have an npm token available.
+[`npm-publish.yml`](.github/workflows/npm-publish.yml) sets the package version, runs version lifecycle scripts, builds the package, and publishes it to npm with provenance.
+It uses npm Trusted Publishing by default and requires Node.js 22.14.0 or newer, npm 11.5.1 or newer, and `id-token: write` in both the caller and reusable workflow.
+Set `workspaces: true` for npm workspaces and provide `npmVersion` only when the bundled npm version must be replaced with an exact stable version.
 
 ```yml
 jobs:
   npm-publish:
     name: Publish npm Package
     uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.3
+    permissions:
+      contents: read
+      id-token: write
     with:
+      packageVersion: 0.1.0
+```
+
+For packages that do not yet exist on npm, run the caller once with the following additions:
+
+```yml
+    with:
+      bootstrapWithToken: true
       packageVersion: 0.1.0
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 ```
 
+The bootstrap refuses packages that already exist.
+After it succeeds, configure a GitHub Actions trusted publisher for every package using the organization, repository, and top-level caller workflow filename, then remove the token and `bootstrapWithToken`.
+
 ##### Test npm Package and Upload Coverage
 
-Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and Codecov upload.
+Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov. The workflow uses the npm version bundled with the selected Node.js release by default; callers that need a specific npm release can provide an exact version such as `npmVersion: '12.0.2'`. Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov. Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through `package-lock.json`, which also keys the emulator cache.
 
 ```yml
 jobs:
   npm-test:
     name: Test npm Package and Upload Coverage
     uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.3
+    with:
+      coverage-files: coverage/lcov.info
     secrets:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```

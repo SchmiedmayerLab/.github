@@ -17,12 +17,27 @@ on:
         required: false
         type: string
         default: '24'
+      npmVersion:
+        description: |
+          Optional exact stable npm version to install before dependency resolution.
+          Uses the npm version bundled with Node.js when omitted.
+          Values must be selected in trusted caller workflow code.
+        required: false
+        type: string
+        default: ''
       working-directory:
         description: |
           The working directory where the project is located. Defaults to $GITHUB_WORKSPACE.
         required: false
         type: string
         default: '.'
+      coverage-files:
+        description: |
+          Optional comma-separated coverage report paths passed to Codecov.
+          Disables automatic report discovery when supplied.
+        required: false
+        type: string
+        default: ''
       setup-firebase-emulator:
         description: |
           Set up the Firebase Emulator.
@@ -47,56 +62,77 @@ jobs:
   testandcoverage:
     name: Test npm Package and Upload Coverage
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@v7
-      - name: Check environment
-        run: |
-            echo "github-hosted: ${{ runner.environment == 'github-hosted' }}"
+        with:
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@v7
         with:
           node-version: ${{ inputs.nodeVersion }}
           cache: 'npm'
           cache-dependency-path: '${{ inputs.working-directory }}/package-lock.json'
+      - name: Set up npm
+        if: ${{ inputs.npmVersion != '' }}
+        env:
+          NPM_VERSION: ${{ inputs.npmVersion }}
+        run: |
+          if [[ ! "$NPM_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "npmVersion must be an exact stable semantic version without leading zeroes."
+            exit 1
+          fi
+
+          npm install --global --ignore-scripts "npm@$NPM_VERSION"
+      - name: Install Node.js dependencies
+        run: npm ci
       - name: Cache Firebase emulators
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
-          key: ${{ runner.os }}-${{ runner.arch }}-firebase-emulators-${{ hashFiles('~/.cache/firebase/emulators/**') }}
+          key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
       - name: Set up Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         uses: actions/setup-java@v5
         with:
           distribution: 'microsoft'
-          java-version: '17'
-      - name: Install Firebase CLI tools
+          java-version: '21'
+      - name: Verify Firebase CLI tools
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
-        run: npm install -g firebase-tools
-      - name: Install Node.js dependencies
-        run: npm ci
-      - name: Run the tests
         run: |
-          if ${{ inputs.setup-firebase-emulator }}; then
-              echo -n "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}" | base64 -d > "$RUNNER_TEMP/google-application-credentials.json"
-              export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
-              echo "Stored the Google application credentials at $GOOGLE_APPLICATION_CREDENTIALS"
+          FIREBASE_BINARY="node_modules/.bin/firebase"
+          if [ ! -x "$FIREBASE_BINARY" ]; then
+            echo "firebase-tools must be installed in the caller's lockfile."
+            exit 1
+          fi
+      - name: Run the tests
+        if: ${{ !inputs.setup-firebase-emulator }}
+        run: npm test
+      - name: Run the tests with Firebase Emulator support
+        if: ${{ inputs.setup-firebase-emulator }}
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+        run: |
+          if [ -n "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" ]; then
+            printf '%s' "$GOOGLE_APPLICATION_CREDENTIALS_BASE64" | base64 --decode > "$RUNNER_TEMP/google-application-credentials.json"
+            export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
           fi
 
           npm test
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
+      - name: Clean up Google application credentials
+        if: ${{ always() && inputs.setup-firebase-emulator }}
+        working-directory: ${{ github.workspace }}
+        run: rm -f "$RUNNER_TEMP/google-application-credentials.json"
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         if: ${{ always() }}
         with:
           token: ${{ secrets.token }}
           working-directory: ${{ inputs.working-directory }}
+          files: ${{ inputs.coverage-files }}
+          disable_search: ${{ inputs.coverage-files != '' }}
           fail_ci_if_error: true
-      - name: Clean up Google application credentials
-        if: ${{ always() }}
-        run: |
-          rm -rf "$RUNNER_TEMP/google-application-credentials.json" || true
