@@ -27,9 +27,9 @@ on:
         type: string
         default: "deploy"
     outputs:
-      page-url:
+      pageUrl:
         description: URL of the deployed GitHub Pages site.
-        value: ${{ jobs.deploy.outputs.page-url }}
+        value: ${{ jobs.deploy.outputs.pageUrl }}
 
 permissions:
   contents: read
@@ -99,7 +99,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     outputs:
-      page-url: ${{ steps.deployment.outputs.page_url }}
+      pageUrl: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy GitHub Pages
         id: deployment
