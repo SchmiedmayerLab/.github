@@ -38,10 +38,11 @@ on:
         default: false
       firebase-tools-version:
         description: |
-          Firebase CLI version expected in the caller's lockfile when Firebase Emulator support is enabled.
+          Optional exact Firebase CLI version expected in the caller's lockfile.
+          Uses the lockfile-installed version without an additional version check when omitted.
         required: false
         type: string
-        default: '15.26.0'
+        default: ''
     secrets:
       token:
         description: |
@@ -92,7 +93,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
-          key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ inputs.firebase-tools-version }}
+          key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
       - name: Set up Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         uses: actions/setup-java@v5
@@ -111,7 +112,7 @@ jobs:
           fi
 
           INSTALLED_VERSION="$("$FIREBASE_BINARY" --version)"
-          if [ "$INSTALLED_VERSION" != "$FIREBASE_TOOLS_VERSION" ]; then
+          if [ -n "$FIREBASE_TOOLS_VERSION" ] && [ "$INSTALLED_VERSION" != "$FIREBASE_TOOLS_VERSION" ]; then
             echo "Expected firebase-tools $FIREBASE_TOOLS_VERSION, found $INSTALLED_VERSION."
             exit 1
           fi
