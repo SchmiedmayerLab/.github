@@ -44,13 +44,6 @@ on:
         required: false
         type: boolean
         default: false
-      firebase-tools-version:
-        description: |
-          Optional exact Firebase CLI version expected in the caller's lockfile.
-          Uses the lockfile-installed version without an additional version check when omitted.
-        required: false
-        type: string
-        default: ''
     secrets:
       token:
         description: |
@@ -110,18 +103,10 @@ jobs:
           java-version: '21'
       - name: Verify Firebase CLI tools
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
-        env:
-          FIREBASE_TOOLS_VERSION: ${{ inputs.firebase-tools-version }}
         run: |
           FIREBASE_BINARY="node_modules/.bin/firebase"
           if [ ! -x "$FIREBASE_BINARY" ]; then
             echo "firebase-tools must be installed in the caller's lockfile."
-            exit 1
-          fi
-
-          INSTALLED_VERSION="$("$FIREBASE_BINARY" --version)"
-          if [ -n "$FIREBASE_TOOLS_VERSION" ] && [ "$INSTALLED_VERSION" != "$FIREBASE_TOOLS_VERSION" ]; then
-            echo "Expected firebase-tools $FIREBASE_TOOLS_VERSION, found $INSTALLED_VERSION."
             exit 1
           fi
       - name: Run the tests
