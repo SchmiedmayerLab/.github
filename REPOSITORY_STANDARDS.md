@@ -109,8 +109,8 @@ If you use this software, please cite it using the metadata in [CITATION.cff](CI
 
 For more information, visit the [Schmiedmayer Lab GitHub organization](https://github.com/SchmiedmayerLab).
 
-![SchmiedmayerLab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-light.png#gh-light-mode-only)
-![SchmiedmayerLab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)
+![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-light.png#gh-light-mode-only)
+![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)
 ```
 
 The first line names the **project**: `part of the PROJECT open-source project`. This repository is
@@ -126,7 +126,7 @@ should be renamed, so that one link works everywhere.
 
 ### Footer assets are deliberately generically named
 
-`assets/footer-light.png` and `assets/footer-dark.png`, with the alt text `SchmiedmayerLab`.
+`assets/footer-light.png` and `assets/footer-dark.png`, with the alt text `Schmiedmayer Lab`.
 
 Nothing in the name or the alt text describes which logos the image contains, so adding, removing
 or reordering logos is a change in this repository alone — no README anywhere needs to be touched.

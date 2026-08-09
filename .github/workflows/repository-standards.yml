@@ -77,6 +77,13 @@ jobs:
           done
           exit $status
 
+      - name: REUSE.toml carries no wildcard
+        run: |
+          if [ -f REUSE.toml ] && grep -qE '^[[:space:]]*path[[:space:]]*=[[:space:]]*\[?[[:space:]]*"\*\*"' REUSE.toml; then
+            echo "::error file=REUSE.toml::a blanket path = [\"**\"] annotation makes reuse lint pass without per-file headers"
+            exit 1
+          fi
+
       - name: CITATION.cff
         run: |
           if [ ! -f CITATION.cff ]; then
@@ -104,8 +111,10 @@ jobs:
               if key in data:
                   fail.append(f"{key} belongs in the repository settings, not CITATION.cff")
           expected = f"https://github.com/{os.environ['REPO']}"
-          if data.get("url") and data["url"].rstrip("/") != expected:
-              fail.append(f"url is {data['url']!r}, expected {expected!r} (stale after a repository rename?)")
+          for field in ("url", "repository-code"):
+              value = data.get(field)
+              if value and value.rstrip("/") != expected:
+                  fail.append(f"{field} is {value!r}, expected {expected!r} (stale after a repository rename?)")
           try:
               contributors = open("CONTRIBUTORS.md").read()
           except OSError:
@@ -191,6 +200,7 @@ jobs:
           has() { echo "$badges" | grep -qxF "$1"; }
 
           allowed='Build and Test|Deployment|CodeQL|Codecov|REUSE status|License: MIT|Release|DOI'
+          has 'Build and Test' || { echo "::error file=README.md::the Build and Test badge is required"; status=1; }
           bad=$(echo "$badges" | grep -vE "^($allowed)$" || true)
           if [ -n "$bad" ]; then
             echo "::error file=README.md::non-standard badge label(s): $(echo "$bad" | tr '\n' ' ')"
