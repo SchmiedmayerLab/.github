@@ -46,7 +46,7 @@ jobs:
           private=$(gh api "repos/$REPO" --jq '.private' 2>/dev/null || echo false)
           releases=$(gh api "repos/$REPO/releases" --jq 'length' 2>/dev/null || echo 0)
           coverage=false
-          if [ -f codecov.yml ] || [ -f .codecov.yml ] || grep -rqs 'codecov' .github/workflows; then coverage=true; fi
+          if grep -rqsE 'codecov/codecov-action|coverage\.yml@|npm-test-coverage\.yml@' .github/workflows; then coverage=true; fi
           {
             echo "private=$private"
             echo "releases=$releases"
@@ -107,6 +107,7 @@ jobs:
             echo "::error::LICENSES/ exists but the root LICENSE.md does not, so GitHub reports no licence and Zenodo inherits that"
           fi
           for file in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md SUPPORT.md; do
+            [ "${REPO##*/}" = ".github" ] && continue
             [ -f "$file" ] && echo "::warning file=$file::$file is provided organization-wide and should not be duplicated"
           done
           exit $status
@@ -287,7 +288,10 @@ jobs:
 
           if [ "$IS_PRIVATE" = "true" ]; then
             for label in 'REUSE status' 'DOI' 'Codecov'; do
-              has "$label" && { echo "::error file=README.md::'$label' cannot resolve for a private repository; remove it until the repository is public"; status=1; }
+            if has "$label"; then
+              echo "::error file=README.md::'$label' cannot resolve for a private repository"
+              status=1
+            fi
             done
           else
             has 'License: MIT' || { echo "::error file=README.md::the License badge is required"; status=1; }
@@ -305,14 +309,19 @@ jobs:
         run: |
           status=0
           if [ "$IS_PRIVATE" != "true" ] && [ "$RELEASES" -gt 0 ] && ! grep -q 'zenodo.org/badge/DOI/' /tmp/readme.scan; then
-            echo "::warning file=README.md::this repository has $RELEASES release(s) but no DOI badge. Zenodo only archives releases published after the integration was enabled, so cut a new release and add the concept DOI."
+            msg="this repository has $RELEASES release(s) but no DOI badge. Zenodo only archives releases published after the"
+            msg="$msg integration was enabled, so cut a new release and add the concept DOI."
+            echo "::warning file=README.md::$msg"
           fi
           if grep -qE 'zenodo\.org/badge/[0-9]+\.svg|zenodo\.org/badge/latestdoi/' /tmp/readme.scan; then
             echo "::error file=README.md::legacy Zenodo badge form; use zenodo.org/badge/DOI/10.5281/zenodo.<CONCEPT_ID>.svg"
             status=1
           fi
-          badge=$(grep -oE 'zenodo\.org/badge/DOI/10\.5281/zenodo\.[0-9A-Za-z_]+' /tmp/readme.scan | head -1 | grep -oE '10\.5281/zenodo\.[0-9A-Za-z_]+' || true)
-          cff=$(grep -oE '^doi:[[:space:]]*10\.5281/zenodo\.[0-9A-Za-z_]+' CITATION.cff 2>/dev/null | grep -oE '10\.5281/zenodo\.[0-9A-Za-z_]+' || true)
+          doi_re='10\.5281/zenodo\.[0-9A-Za-z_]+'
+          badge=$(grep -oE "zenodo\.org/badge/DOI/$doi_re" /tmp/readme.scan | head -1 \
+                  | grep -oE "$doi_re" || true)
+          cff=$(grep -oE "^doi:[[:space:]]*$doi_re" CITATION.cff 2>/dev/null \
+                | grep -oE "$doi_re" || true)
           if [ -n "$badge" ] && [ -n "$cff" ] && [ "$badge" != "$cff" ]; then
             echo "::error::README badge DOI ($badge) and CITATION.cff DOI ($cff) disagree"
             status=1
@@ -329,10 +338,12 @@ jobs:
           governed=$(echo /tmp/readme.scan; ls CITATION.cff CONTRIBUTORS.md 2>/dev/null; ls .github/workflows/*.yml 2>/dev/null || true)
           for file in $governed; do
             while IFS= read -r line; do
-              holder=$(echo "$line" | sed -E 's/.*SPDX-FileCopyrightText:[[:space:]]*//; s/^[0-9]{4}(-[0-9]{4})?(,[[:space:]]*[0-9]{4})*[[:space:]]*//')
+              strip_tag='s/.*SPDX-FileCopyrightText:[[:space:]]*//'
+              strip_year='s/^[0-9]{4}(-[0-9]{4})?(,[[:space:]]*[0-9]{4})*[[:space:]]*//'
+              holder=$(echo "$line" | sed -E "$strip_tag; $strip_year")
               case "$holder" in
                 "Schmiedmayer Lab"*|"Stanford University"*) ;;
-                *) echo "::error file=$file::copyright holder must be 'Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)', found: $holder"
+                *) echo "::error file=$file::copyright holder must be 'Schmiedmayer Lab and the project authors', found: $holder"
                    status=1 ;;
               esac
             done < <(grep -hE '^[[:space:]]*(#|<!--|//|\*|--)?[[:space:]]*SPDX-FileCopyrightText:' "$file" 2>/dev/null || true)
@@ -346,7 +357,8 @@ jobs:
             echo "::error file=LICENSE.md::LICENSE.md needs a filled-in copyright line naming Schmiedmayer Lab"
             status=1
           fi
-          others=$(grep -rhoE '^[[:space:]]*(#)?[[:space:]]*SPDX-FileCopyrightText:[[:space:]]*.*' . --include='*.license' --include='REUSE.toml' 2>/dev/null \
+          spdx_re='^[[:space:]]*(#)?[[:space:]]*SPDX-FileCopyrightText:[[:space:]]*.*'
+          others=$(grep -rhoE "$spdx_re" . --include='*.license' --include='REUSE.toml' 2>/dev/null \
                    | sed -E 's/.*SPDX-FileCopyrightText:[[:space:]]*//' | sort -u \
                    | grep -vE '^[0-9]{4}.*(Schmiedmayer Lab|Stanford University)' || true)
           if [ -n "$others" ]; then
@@ -359,8 +371,8 @@ jobs:
           IS_PRIVATE: ${{ steps.facts.outputs.private }}
         run: |
           meta=$(gh api "repos/$REPO" 2>/dev/null || echo '{}')
-          if [ "$(echo "$meta" | jq -r 'has("full_name")')" != "true" ]; then
-            echo "::notice::repository settings are not readable with this token; skipping the settings checks"
+          if [ "$(echo "$meta" | jq -r 'has("allow_squash_merge")')" != "true" ]; then
+            echo "::notice::repository settings need an administrative token; skipping the settings checks"
             exit 0
           fi
           get() { echo "$meta" | python3 -c "import json,sys;d=json.load(sys.stdin);v=d$1;print('' if v is None else v)" 2>/dev/null; }
@@ -388,9 +400,12 @@ jobs:
           done
 
           if [ "$IS_PRIVATE" != "true" ] && [ "$(echo "$meta" | jq -r 'has("security_and_analysis")')" = "true" ]; then
-            sec=$(echo "$meta" | python3 -c "import json,sys;d=(json.load(sys.stdin).get('security_and_analysis') or {});print(' '.join(f\"{k}={(v or {}).get('status')}\" for k,v in d.items()))" 2>/dev/null)
-            case "$sec" in *"secret_scanning=enabled"*) ;; *) echo "::warning::secret scanning is disabled; it is free for public repositories" ;; esac
-            case "$sec" in *"secret_scanning_push_protection=enabled"*) ;; *) echo "::warning::secret scanning push protection is disabled; it blocks credentials before they land" ;; esac
+            sec=$(echo "$meta" | jq -r '(.security_and_analysis // {})
+                    | to_entries | map("\(.key)=\(.value.status)") | join(" ")' 2>/dev/null)
+            case "$sec" in *"secret_scanning=enabled"*) ;;
+              *) echo "::warning::secret scanning is disabled; it is free for public repositories" ;; esac
+            case "$sec" in *"secret_scanning_push_protection=enabled"*) ;;
+              *) echo "::warning::push protection is disabled; it blocks credentials before they land" ;; esac
             case "$sec" in *"dependabot_security_updates=enabled"*) ;; *) echo "::warning::Dependabot security updates are disabled" ;; esac
           fi
 
@@ -398,7 +413,7 @@ jobs:
           if ! echo "$raw" | python3 -c "import json,sys;sys.exit(0 if isinstance(json.load(sys.stdin),list) else 1)" 2>/dev/null; then
             echo "::notice::branch rulesets are not readable here (private repository on the Free plan)"
           else
-            rulesets=$(echo "$raw" | python3 -c "import json,sys;print(','.join(r['name'] for r in json.load(sys.stdin) if r.get('enforcement')=='active'))")
+            rulesets=$(echo "$raw" | jq -r '[.[] | select(.enforcement == "active") | .name] | join(",")')
             if [ -z "$rulesets" ]; then
               echo "::warning::no active branch ruleset; the default branch accepts direct pushes"
             else
