@@ -20,7 +20,9 @@ case "$MODE" in
   *) echo "usage: $0 [audit|apply] [repository]" >&2; exit 2 ;;
 esac
 
-command -v gh >/dev/null || { echo "the GitHub CLI is required" >&2; exit 1; }
+for tool in gh jq; do
+  command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
+done
 
 STANDARDS_CHECKS='["Standards / Surface","Standards / Licensing / Check REUSE Compliance","Standards / Links / Check Markdown Links","Standards / Actions / Run actionlint"]'
 
