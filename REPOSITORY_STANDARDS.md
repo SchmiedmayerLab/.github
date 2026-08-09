@@ -333,7 +333,7 @@ each repository's static-analysis workflow:
 ```yaml
 jobs:
   standards:
-    name: Check Repository Standards
+    name: Standards
     uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.4
     permissions:
       contents: read

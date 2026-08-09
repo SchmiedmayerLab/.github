@@ -20,15 +20,19 @@ env:
 
 jobs:
   reuse:
-    name: REUSE Compliance
+    name: REUSE
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.4
 
-  markdown-links:
-    name: Markdown Links
+  links:
+    name: Links
     uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.4
 
+  actions:
+    name: Actions
+    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.4
+
   surface:
-    name: Repository Surface
+    name: Surface
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
@@ -62,6 +66,36 @@ jobs:
         run: |
           # shellcheck disable=SC2016
           awk '/^```/{fence=!fence; next} !fence' README.md | sed 's/`[^`]*`//g' > /tmp/readme.scan
+
+      - name: YAML in .github
+        run: |
+          python3 -m pip install --quiet yamllint
+          config=""
+          for candidate in .yamllint.yml .yamllint.yaml .yamllint; do
+            if [ -f "$candidate" ]; then config="$candidate"; break; fi
+          done
+          if [ -z "$config" ]; then
+            config=$(mktemp)
+            cat > "$config" <<'YAMLLINT'
+          extends: default
+          rules:
+            line-length:
+              max: 150
+              level: warning
+            truthy:
+              level: error
+              allowed-values: ["false", "true", "on"]
+            document-start: disable
+          YAMLLINT
+          fi
+          yamllint -c "$config" --strict=false .github
+
+      - name: Trailing whitespace in .github
+        run: |
+          if git grep -nI '[[:blank:]]$' -- .github; then
+            echo "::error::trailing whitespace in .github"
+            exit 1
+          fi
 
       - name: Required files
         run: |

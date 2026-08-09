@@ -20,5 +20,5 @@ permissions:
 
 jobs:
   standards:
-    name: Check Repository Standards
+    name: Standards
     uses: ./.github/workflows/repository-standards.yml
