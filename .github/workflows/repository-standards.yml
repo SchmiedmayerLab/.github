@@ -85,7 +85,7 @@ jobs:
           fi
           python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
           REPO="$REPO" python3 - <<'PY'
-          import os, sys, yaml
+          import os, re, sys, yaml
           data = yaml.safe_load(open("CITATION.cff"))
           fail = []
           for key in ("cff-version", "message", "type", "authors", "title", "license", "url", "repository-code"):
