@@ -10,7 +10,7 @@ SPDX-License-Identifier: MIT
 
 # Schmiedmayer Lab
 
-[![Build and Test](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml)
+[![Build and Test](https://github.com/SchmiedmayerLab/.github/actions/workflows/self-standards.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/self-standards.yml)
 [![REUSE status](https://api.reuse.software/badge/github.com/SchmiedmayerLab/.github)](https://api.reuse.software/info/github.com/SchmiedmayerLab/.github)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SchmiedmayerLab/.github/blob/main/LICENSE.md)
 
