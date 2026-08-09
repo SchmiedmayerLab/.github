@@ -3,7 +3,7 @@
 # Based on the Apodini workflow found at: https://github.com/Apodini/.github/workflows/docker-build-and-push.yml
 # and the Docker documentation found at https://docs.docker.com/build/ci/github-actions/multi-platform/
 #
-# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 #
 # SPDX-License-Identifier: MIT
 #

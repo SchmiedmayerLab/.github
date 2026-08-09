@@ -2,7 +2,7 @@
 
 This source file is part of the Schmiedmayer Lab open-source organization
 
-SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 
 SPDX-License-Identifier: MIT
 
@@ -30,9 +30,9 @@ We use the [REUSE Software Conventions](https://reuse.software) to structure our
 
 Each file must contain the following header information, with `Schmiedmayer Lab` replaced by the project name.
 ```
-This source file is part of the Schmiedmayer Lab open-source project
+This source file is part of the Schmiedmayer Lab open-source organization
 
-SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 
 SPDX-License-Identifier: MIT
 ```

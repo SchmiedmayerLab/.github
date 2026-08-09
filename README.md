@@ -2,7 +2,7 @@
 
 This source file is part of the Schmiedmayer Lab open-source organization
 
-SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 
 SPDX-License-Identifier: MIT
 
@@ -10,7 +10,9 @@ SPDX-License-Identifier: MIT
 
 # Schmiedmayer Lab
 
-[![Validate Repository](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml)
+[![Build and Test](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml)
+[![REUSE status](https://api.reuse.software/badge/github.com/SchmiedmayerLab/.github)](https://api.reuse.software/info/github.com/SchmiedmayerLab/.github)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SchmiedmayerLab/.github/blob/main/LICENSE.md)
 
 This repository provides default community health files, reusable GitHub Actions workflows, templates, and shared documentation for the Schmiedmayer Lab organization.
 
@@ -29,6 +31,7 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | [`eslint.yml`](#run-eslint) | Run ESLint for JavaScript and TypeScript projects. |
 | [`markdown-links.yml`](#check-markdown-links) | Check Markdown links. |
 | [`periphery.yml`](#run-periphery) | Run Periphery to detect unused Swift declarations. |
+| [`repository-standards.yml`](#check-repository-standards) | Check the organization repository baseline in one call. |
 | [`reuse.yml`](#check-reuse-compliance) | Check REUSE license and copyright metadata. |
 | [`swiftlint.yml`](#run-swiftlint) | Run SwiftLint for Swift style and quality checks. |
 
@@ -131,6 +134,31 @@ jobs:
   periphery:
     name: Run Periphery
     uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.4
+```
+
+##### Check Repository Standards
+
+[`repository-standards.yml`](.github/workflows/repository-standards.yml) gives a repository the whole
+organization baseline in one call: REUSE compliance, Markdown link health, and the repository surface
+— required files, `CITATION.cff`, `CONTRIBUTORS.md`, badges, README structure, copyright holder, and
+repository settings. See [REPOSITORY_STANDARDS.md](REPOSITORY_STANDARDS.md) for the standard it
+enforces.
+Use it in every repository. It takes no inputs and there is no opt-out — every rule applies
+everywhere.
+
+```yml
+name: Repository Standards
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  standards:
+    name: Check Repository Standards
+    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.4
 ```
 
 ##### Check REUSE Compliance
@@ -611,9 +639,21 @@ jobs:
       repository: ${{ github.repository }}
 ```
 
+## Contributing
+
+Contributions to this project are welcome. Please make sure to read the [contribution guidelines](https://github.com/SchmiedmayerLab/.github/blob/main/CONTRIBUTING.md) and the [contributor covenant code of conduct](https://github.com/SchmiedmayerLab/.github/blob/main/CODE_OF_CONDUCT.md) first. You can find a list of contributors in the [CONTRIBUTORS.md](CONTRIBUTORS.md) file.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for more information.
+
+## Citation
+
+If you use this software, please cite it using the metadata in [CITATION.cff](CITATION.cff), which GitHub surfaces through the [*Cite this repository*](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files) button.
+
 ## Our Research
 
 For more information, visit the [Schmiedmayer Lab GitHub organization](https://github.com/SchmiedmayerLab).
 
-![Stanford and Stanford Medicine logos](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/stanford-footer-light.png#gh-light-mode-only)
-![Stanford and Stanford Medicine logos](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/stanford-footer-dark.png#gh-dark-mode-only)
+![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-light.png#gh-light-mode-only)
+![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)

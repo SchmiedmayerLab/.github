@@ -1,0 +1,24 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+# The repository that defines the standard is held to it on the same terms as every other
+# repository. The organization profile page lives at profile/README.md and is not covered by the
+# README rules, which apply to this repository's own README.md.
+
+name: Repository Standards
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  standards:
+    name: Check Repository Standards
+    uses: ./.github/workflows/repository-standards.yml
