@@ -235,6 +235,10 @@ statement, not a tidy-up.
 Every repository is archived, this one included. A release without a DOI is a release nobody can
 cite, so the check warns as soon as a repository has releases and no DOI badge.
 
+Zenodo takes the record's description and keywords from the repository description and topics, not
+from `CITATION.cff`. Adding `abstract` or `keywords` to the citation file creates a second copy that
+goes stale, so the check rejects both.
+
 1. **Paul Schmiedmayer** enables the repository at <https://zenodo.org/account/settings/github/>.
    The account that switches the integration on owns the resulting DOI records, so this is not
    delegated.
