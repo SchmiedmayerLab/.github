@@ -253,6 +253,11 @@ Settings live outside the repository, so they cannot travel in a pull request. T
 workflow reports on them as warnings rather than failures, because a pull request author cannot
 change them.
 
+It can only see part of them. Merge methods, branch deletion and the security settings are
+administrative fields that GitHub withholds from the read-only token a workflow runs with, so those
+are never checked in CI — the description, topics, wiki and issues are. Run the script below with an
+administrative token to check the rest.
+
 | Setting | Value | Why |
 |---|---|---|
 | Merge methods | **squash only** | Merge commits break linear history; rebase merges lose the pull request as the unit of change. |

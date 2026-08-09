@@ -315,7 +315,7 @@ jobs:
           if [ "$IS_PRIVATE" != "true" ] && [ "$RELEASES" -gt 0 ] && ! grep -q 'zenodo.org/badge/DOI/' /tmp/readme.scan; then
             msg="this repository has $RELEASES release(s) but no DOI badge. Zenodo only archives releases published after the"
             msg="$msg integration was enabled, so cut a new release and add the concept DOI."
-            echo "::notice file=README.md::$msg"
+            echo "::warning file=README.md::$msg"
           fi
           if grep -qE 'zenodo\.org/badge/[0-9]+\.svg|zenodo\.org/badge/latestdoi/' /tmp/readme.scan; then
             echo "::error file=README.md::legacy Zenodo badge form; use zenodo.org/badge/DOI/10.5281/zenodo.<CONCEPT_ID>.svg"
@@ -375,19 +375,21 @@ jobs:
           IS_PRIVATE: ${{ steps.facts.outputs.private }}
         run: |
           meta=$(gh api "repos/$REPO" 2>/dev/null || echo '{}')
-          if [ "$(echo "$meta" | jq -r 'has("allow_squash_merge")')" != "true" ]; then
-            echo "::notice::repository settings need an administrative token; skipping the settings checks"
-            exit 0
+          admin=$(echo "$meta" | jq -r 'has("allow_squash_merge")')
+          if [ "$admin" != "true" ]; then
+            echo "::notice::merge, branch and security settings need an administrative token and were not checked"
           fi
           get() { echo "$meta" | python3 -c "import json,sys;d=json.load(sys.stdin);v=d$1;print('' if v is None else v)" 2>/dev/null; }
 
-          [ "$(get "['allow_squash_merge']")" = "True" ]  || echo "::warning::squash merging should be the only merge method"
-          [ "$(get "['allow_merge_commit']")" = "False" ] || echo "::warning::merge commits should be disabled"
-          [ "$(get "['allow_rebase_merge']")" = "False" ] || echo "::warning::rebase merging should be disabled"
-          [ "$(get "['allow_auto_merge']")" = "True" ]    || echo "::warning::auto-merge should be enabled"
-          [ "$(get "['delete_branch_on_merge']")" = "True" ] || echo "::warning::branches should be deleted on merge"
-          [ "$(get "['has_wiki']")" = "False" ]           || echo "::warning::the wiki should be disabled"
-          [ "$(get "['has_issues']")" = "True" ]          || echo "::warning::issues should be enabled"
+          if [ "$admin" = "true" ]; then
+            [ "$(get "['allow_squash_merge']")" = "True" ]  || echo "::warning::squash merging should be the only merge method"
+            [ "$(get "['allow_merge_commit']")" = "False" ] || echo "::warning::merge commits should be disabled"
+            [ "$(get "['allow_rebase_merge']")" = "False" ] || echo "::warning::rebase merging should be disabled"
+            [ "$(get "['allow_auto_merge']")" = "True" ]    || echo "::warning::auto-merge should be enabled"
+            [ "$(get "['delete_branch_on_merge']")" = "True" ] || echo "::warning::branches should be deleted on merge"
+          fi
+          [ "$(get "['has_wiki']")" = "False" ]  || echo "::warning::the wiki should be disabled"
+          [ "$(get "['has_issues']")" = "True" ] || echo "::warning::issues should be enabled"
 
           description=$(get "['description']")
           if [ -z "$description" ]; then
@@ -403,7 +405,8 @@ jobs:
             case "$t" in *[A-Z_]*) echo "::warning::topic '$t' should be lowercase-hyphenated" ;; esac
           done
 
-          if [ "$IS_PRIVATE" != "true" ] && [ "$(echo "$meta" | jq -r 'has("security_and_analysis")')" = "true" ]; then
+          if [ "$IS_PRIVATE" != "true" ] && [ "$admin" = "true" ] \
+             && [ "$(echo "$meta" | jq -r 'has("security_and_analysis")')" = "true" ]; then
             sec=$(echo "$meta" | jq -r '(.security_and_analysis // {})
                     | to_entries | map("\(.key)=\(.value.status)") | join(" ")' 2>/dev/null)
             case "$sec" in *"secret_scanning=enabled"*) ;;
