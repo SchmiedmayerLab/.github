@@ -24,7 +24,7 @@ for tool in gh jq; do
   command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
 done
 
-STANDARDS_CHECKS='["Standards / Surface","Standards / Licensing / Check REUSE Compliance","Standards / Links / Check Markdown Links","Standards / Actions / Run actionlint"]'
+STANDARDS_CHECKS='["Standards / Surface","Standards / Licensing / REUSE Compliance","Standards / Docs / Markdown Links","Standards / Actions / Run actionlint"]'
 
 has_standards_caller() {
   gh api "repos/$ORG/$1/contents/.github/workflows/repository-standards.yml" --silent >/dev/null 2>&1

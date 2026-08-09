@@ -24,7 +24,7 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.4
 
   links:
-    name: Links
+    name: Docs
     uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.4
 
   actions:
@@ -154,9 +154,11 @@ jobs:
           except OSError:
               contributors = ""
           listed = re.findall(r"^[*-]\s*\[([^\]]+)\]\(https://github\.com/", contributors, re.M)
-          expected = [f"{a.get('given-names','')} {a.get('family-names','')}".strip() for a in data.get("authors") or []]
-          if listed != expected:
-              fail.append(f"CONTRIBUTORS.md lists {listed}, CITATION.cff lists {expected}; they must match exactly, in order")
+          missing = [f"{a.get('given-names','')} {a.get('family-names','')}".strip()
+                     for a in data.get("authors") or []
+                     if f"{a.get('given-names','')} {a.get('family-names','')}".strip() not in listed]
+          if missing:
+              fail.append(f"CITATION.cff authors absent from CONTRIBUTORS.md: {missing}")
           for problem in fail:
               print(f"::error file=CITATION.cff::{problem}")
           sys.exit(1 if fail else 0)

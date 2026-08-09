@@ -6,7 +6,7 @@
 # SPDX-License-Identifier: MIT
 #
 
-name: Check Markdown Links
+name: Markdown Links
 
 on:
   workflow_call:
@@ -24,7 +24,7 @@ permissions:
 
 jobs:
   markdown_link_check:
-    name: Check Markdown Links
+    name: Markdown Links
     runs-on: ${{ fromJson(inputs.runs_on_labels) }}
     steps:
       - uses: actions/checkout@v7

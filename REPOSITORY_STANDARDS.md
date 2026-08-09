@@ -163,8 +163,10 @@ error rather than a status. They become required in the normal way once a reposi
 
 ## `CITATION.cff` and `CONTRIBUTORS.md` must match
 
-The two files list the **same people in the same order**. The check compares them directly and
-fails on any difference.
+`CITATION.cff` is the authority for **authorship** — who to cite. `CONTRIBUTORS.md` lists
+**everyone who contributed**, which is a superset, and it is where upstream attributions live under
+`## Attributions`. The check requires every `CITATION.cff` author to appear in `CONTRIBUTORS.md`; it
+does not require the reverse, and it does not care about order.
 
 
 ## `CONTRIBUTORS.md` shape
