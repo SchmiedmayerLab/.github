@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 env:
   EXPECTED_SHARED_WORKFLOW_REF: v0.4

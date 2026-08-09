@@ -6,10 +6,6 @@
 # SPDX-License-Identifier: MIT
 #
 
-# The repository that defines the standard is held to it on the same terms as every other
-# repository. The organization profile page lives at profile/README.md and is not covered by the
-# README rules, which apply to this repository's own README.md.
-
 name: Repository Standards
 
 on:
@@ -17,6 +13,10 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   standards:

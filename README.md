@@ -155,10 +155,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   standards:
     name: Check Repository Standards
-    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
 ```
 
 ##### Check REUSE Compliance
