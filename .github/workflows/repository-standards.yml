@@ -56,7 +56,7 @@ jobs:
 
       - name: Shared workflows are on the expected version
         run: |
-          drift=$(grep -rhoE 'SchmiedmayerLab/\.github/\.github/workflows/[A-Za-z0-9._-]+@[A-Za-z0-9._-]+' .github/workflows 2>/dev/null \
+          drift=$(grep -rhoE 'SchmiedmayerLab/\.github/\.github/workflows/[A-Za-z0-9._-]+@[A-Za-z0-9._/-]+' .github/workflows 2>/dev/null \
                   | grep -v "@${EXPECTED_SHARED_WORKFLOW_REF}$" | sort -u || true)
           if [ -n "$drift" ]; then
             echo "::warning::shared workflow references not on ${EXPECTED_SHARED_WORKFLOW_REF}: $(echo "$drift" | tr '\n' ' ')"
@@ -234,7 +234,11 @@ jobs:
           has() { echo "$badges" | grep -qxF "$1"; }
 
           allowed='Build and Test|Deployment|CodeQL|Codecov|REUSE status|License: MIT|Release|DOI'
-          has 'Build and Test' || { echo "::error file=README.md::the Build and Test badge is required"; status=1; }
+          ci=$(find .github/workflows -maxdepth 1 -name '*.yml' -o -maxdepth 1 -name '*.yaml' 2>/dev/null \
+               | grep -vE '/(repository-standards|self-standards|dependabot)\.ya?ml$' | head -1 || true)
+          if [ -n "$ci" ]; then
+            has 'Build and Test' || { echo "::error file=README.md::the Build and Test badge is required"; status=1; }
+          fi
           bad=$(echo "$badges" | grep -vE "^($allowed)$" || true)
           if [ -n "$bad" ]; then
             echo "::error file=README.md::non-standard badge label(s): $(echo "$bad" | tr '\n' ' ')"
@@ -332,7 +336,7 @@ jobs:
             done < <(grep -hE '^[[:space:]]*(#|<!--|//|\*|--)?[[:space:]]*SPDX-FileCopyrightText:' "$file" 2>/dev/null || true)
           done
           if grep -rqE '<year>|<copyright holders>|\[yyyy\][[:space:]]*\[name of copyright owner\]' \
-               README.md CITATION.cff CONTRIBUTORS.md LICENSE.md 2>/dev/null; then
+               /tmp/readme.scan CITATION.cff CONTRIBUTORS.md LICENSE.md 2>/dev/null; then
             echo "::error::an unfilled copyright placeholder is still present"
             status=1
           fi

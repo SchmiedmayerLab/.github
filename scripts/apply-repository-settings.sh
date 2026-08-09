@@ -107,6 +107,8 @@ for repo in $repos; do
     || drift+=("merge methods are not squash-only")
   [ "$(echo "$meta" | jq -r .allow_auto_merge)" = "true" ] || drift+=("auto-merge is disabled")
   [ "$(echo "$meta" | jq -r .delete_branch_on_merge)" = "true" ] || drift+=("branches are not deleted on merge")
+  [ "$(echo "$meta" | jq -r .has_wiki)" = "false" ] || drift+=("the wiki is enabled")
+  [ "$(echo "$meta" | jq -r .has_projects)" = "false" ] || drift+=("projects are enabled")
   [ "$(echo "$meta" | jq -r '.security_and_analysis.secret_scanning.status')" = "enabled" ] \
     || drift+=("secret scanning is disabled")
   [ "$(echo "$meta" | jq -r '.security_and_analysis.secret_scanning_push_protection.status')" = "enabled" ] \
@@ -141,7 +143,8 @@ for repo in $repos; do
   printf '  applying  %s\n' "$repo"
   gh api -X PATCH "repos/$ORG/$repo" --silent \
     -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false \
-    -F allow_auto_merge=true -F delete_branch_on_merge=true
+    -F allow_auto_merge=true -F delete_branch_on_merge=true \
+    -F has_wiki=false -F has_projects=false
   gh api -X PATCH "repos/$ORG/$repo" --silent \
     -f 'security_and_analysis[secret_scanning][status]=enabled' \
     -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
