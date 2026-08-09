@@ -29,6 +29,33 @@ esac
 
 command -v gh >/dev/null || { echo "the GitHub CLI is required" >&2; exit 1; }
 
+# Contexts the standards workflow reports. Required only where the caller exists,
+# because a required check that never reports blocks every merge.
+STANDARDS_CHECKS='["Standards / Surface","Standards / Licensing / Check REUSE Compliance","Standards / Links / Check Markdown Links","Standards / Actions / Actionlint"]'
+
+has_standards_caller() {
+  gh api "repos/$ORG/$1/contents/.github/workflows/repository-standards.yml" --silent >/dev/null 2>&1
+}
+
+# Adds the standards contexts to the Main ruleset, keeping every check already required.
+require_standards_checks() {
+  local repo=$1 id=$2 body
+  body=$(gh api "repos/$ORG/$repo/rulesets/$id" | jq --argjson add "$STANDARDS_CHECKS" '
+    {name, target, enforcement, bypass_actors, conditions,
+     rules: (
+       (if any(.rules[]; .type == "required_status_checks") then .rules
+        else .rules + [{type: "required_status_checks",
+                        parameters: {strict_required_status_checks_policy: true,
+                                     do_not_enforce_on_create: false,
+                                     required_status_checks: []}}] end)
+       | map(if .type == "required_status_checks" then
+               .parameters.required_status_checks =
+                 ((.parameters.required_status_checks + ($add | map({context: .})))
+                  | unique_by(.context))
+             else . end))}')
+  printf '%s' "$body" | gh api -X PUT "repos/$ORG/$repo/rulesets/$id" --silent --input -
+}
+
 ruleset_payload() {
   cat <<'JSON'
 {
@@ -88,9 +115,15 @@ for repo in $repos; do
     || drift+=("Dependabot security updates are disabled")
 
   rulesets=$(gh api "repos/$ORG/$repo/rulesets" 2>/dev/null || echo 'null')
+  main_id=""
   if [ "$(echo "$rulesets" | jq -r 'if type == "array" then "ok" else "unreadable" end')" = "ok" ]; then
-    [ "$(echo "$rulesets" | jq '[.[] | select((.name | ascii_downcase) == "main") and (.enforcement == "active")] | length')" -gt 0 ] \
-      || drift+=("no active Main ruleset")
+    main_id=$(echo "$rulesets" | jq -r '[.[] | select((.name | ascii_downcase) == "main" and .enforcement == "active")][0].id // ""')
+    [ -n "$main_id" ] || drift+=("no active Main ruleset")
+    if [ -n "$main_id" ] && has_standards_caller "$repo"; then
+      missing=$(gh api "repos/$ORG/$repo/rulesets/$main_id" | jq -r --argjson want "$STANDARDS_CHECKS" '
+        [$want[] | select(. as $c | ([.. | objects | select(has("context")) | .context] | index($c) | not))] | join(", ")')
+      [ -z "$missing" ] || drift+=("standards checks not required: $missing")
+    fi
   fi
 
   if [ "${#drift[@]}" -eq 0 ]; then
@@ -118,6 +151,12 @@ for repo in $repos; do
   # discard the required status checks, which are chosen per repository.
   if [ "$(echo "$rulesets" | jq -r 'if type == "array" then ([.[] | select((.name | ascii_downcase) == "main")] | length) else 1 end')" = "0" ]; then
     ruleset_payload | gh api -X POST "repos/$ORG/$repo/rulesets" --silent --input -
+    main_id=$(gh api "repos/$ORG/$repo/rulesets" --jq '[.[] | select((.name | ascii_downcase) == "main")][0].id // ""' 2>/dev/null || echo "")
+  fi
+
+  # Gate on the standards checks only once the repository actually runs them.
+  if [ -n "$main_id" ] && has_standards_caller "$repo"; then
+    require_standards_checks "$repo" "$main_id"
   fi
 
   if [ "$private" = "true" ]; then

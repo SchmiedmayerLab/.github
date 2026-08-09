@@ -287,7 +287,10 @@ whole baseline. Auditing is the default and changes nothing:
 ```
 
 Applying is idempotent, and it creates a `Main` ruleset only where none exists — replacing an
-existing one would discard that repository's status checks. Audit mode exits non-zero when it finds
+existing one would discard that repository's status checks. Where the repository already calls
+`repository-standards.yml`, the script also adds the four `Standards / …` contexts to the required
+checks, merging them into whatever is required already. It does that **only** where the caller
+exists, because a required check that never reports blocks every merge. Audit mode exits non-zero when it finds
 drift, so it also works as a scheduled check. Forks are skipped; they mirror an upstream project.
 
 The script is the definition. When the baseline changes, change the script and this section
