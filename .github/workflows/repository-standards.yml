@@ -101,6 +101,37 @@ jobs:
             exit 1
           fi
 
+      - name: One project name per repository
+        run: |
+          python3 - <<'PY'
+          import pathlib, re, sys
+          DECLARED = re.compile(r"This source file is part of the (.+? open-source (?:project|organization))")
+          FENCE = re.compile(r"```.*?```", re.S)
+          HOLDER = re.compile(r"SPDX-FileCopyrightText:\s*(?:\d{4}(?:-\d{4})?\s+)?(.+)")
+          OURS = ("Schmiedmayer Lab", "Stanford University")
+          readme = pathlib.Path("README.md").read_text(errors="ignore")
+          m = DECLARED.search(FENCE.sub("", readme))
+          if not m:
+              print("::error file=README.md::the README header must name the project")
+              sys.exit(1)
+          project = m.group(1)
+          others = {}
+          for f in pathlib.Path(".").rglob("*"):
+              if not f.is_file() or ".git/" in str(f): continue
+              try: text = f.read_text(errors="ignore")
+              except Exception: continue
+              if "source file is part of the" not in text: continue
+              if f.suffix.lower() in {".md", ".markdown"}: text = FENCE.sub("", text)
+              holders = HOLDER.findall(text)
+              if holders and not any(h.startswith(OURS) for h in holders):
+                  continue
+              for name in DECLARED.findall(text):
+                  if name != project: others.setdefault(name, str(f))
+          for name, where in sorted(others.items()):
+              print(f"::error file={where}::names {name!r}; this repository is {project!r}")
+          sys.exit(1 if others else 0)
+          PY
+
       - name: Required files
         run: |
           status=0

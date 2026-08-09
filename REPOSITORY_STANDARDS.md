@@ -117,6 +117,16 @@ The first line names the **project**: `part of the PROJECT open-source project`.
 the one exception — it is not a project, so its own files say `open-source organization`. Do not
 copy that wording into a repository.
 
+**Every file the project owns names the same project as the README**, and the check fails on any
+second name. A file whose `SPDX-FileCopyrightText` names a third party is exempt — it keeps its own
+provenance line, its own holder and its own licence, exactly as it keeps its own licence under
+`REUSE.toml`. A package merged into this repository under the project's own copyright is not third
+party: it takes the project name, and its origin is recorded in `CONTRIBUTORS.md` under
+`## Attributions`.
+
+Nothing here limits SPDX itself. A file may carry as many `SPDX-FileCopyrightText` lines as it has
+holders, and any valid `SPDX-License-Identifier` expression.
+
 Project-specific notes — provenance, documentation links, issue trackers — belong inside
 `## Contributing`, after the standard paragraph. Everything else in the footer is fixed text so it
 can be checked mechanically.
