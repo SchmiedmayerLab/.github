@@ -8,8 +8,8 @@ SPDX-License-Identifier: MIT
 
 # Repository Standards
 
-Proposed for `SchmiedmayerLab/.github`. Defines what every public repository in the
-organization looks like, so the same conventions do not have to be rediscovered per project.
+Defines what every repository in the organization looks like, so the same conventions do not have
+to be rediscovered per project.
 
 ## Required files
 
