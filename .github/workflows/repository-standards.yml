@@ -21,15 +21,15 @@ env:
 jobs:
   reuse:
     name: Licensing
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
+    uses: $/.github/workflows/reuse.yml
 
   links:
     name: Docs
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
+    uses: $/.github/workflows/markdown-links.yml
 
   actions:
     name: Actions
-    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.5
+    uses: $/.github/workflows/actionlint.yml
 
   surface:
     name: Surface

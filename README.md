@@ -530,7 +530,7 @@ After publication, the workflow summary provides the interactive `npm trust` com
 Repositories may define an optional `release:prepare` script for package-specific preparation after versions are synchronized.
 The workflow automatically runs `build`, `pack:check`, and `pack:lint` when those scripts exist.
 Callers pinned to an earlier release continue to use the earlier interface unchanged.
-When adopting v0.4, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
+When adopting v0.5, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
 Replace `bootstrapWithToken: true` with explicit package names in `bootstrapPackages`, or use `*` only when every unpublished package is intentionally being bootstrapped.
 
 ##### Build and Deploy npm Project Pages
@@ -554,7 +554,7 @@ jobs:
 Call `npm run pages:build` directly in pull-request CI so that build jobs do not receive deployment permissions.
 `nodeVersionFile` and `artifactPath` are available only for repositories that cannot follow the default conventions.
 This convention also supports static Next.js exports, replacing the former framework-specific workflow.
-Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.4`.
+Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.5`.
 
 ##### Test npm Package and Upload Coverage
 
