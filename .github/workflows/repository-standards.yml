@@ -46,7 +46,11 @@ jobs:
           private=$(gh api "repos/$REPO" --jq '.private' 2>/dev/null || echo false)
           releases=$(gh api "repos/$REPO/releases" --jq 'length' 2>/dev/null || echo 0)
           coverage=false
-          if grep -rqsE 'codecov/codecov-action|coverage\.yml@|npm-test-coverage\.yml@' .github/workflows; then coverage=true; fi
+          for wf in .github/workflows/*.y*ml; do
+            [ -f "$wf" ] || continue
+            grep -qs 'workflow_call:' "$wf" && continue
+            grep -qsE 'codecov/codecov-action|coverage\.yml@|npm-test-coverage\.yml@' "$wf" && coverage=true
+          done
           {
             echo "private=$private"
             echo "releases=$releases"
@@ -311,7 +315,7 @@ jobs:
           if [ "$IS_PRIVATE" != "true" ] && [ "$RELEASES" -gt 0 ] && ! grep -q 'zenodo.org/badge/DOI/' /tmp/readme.scan; then
             msg="this repository has $RELEASES release(s) but no DOI badge. Zenodo only archives releases published after the"
             msg="$msg integration was enabled, so cut a new release and add the concept DOI."
-            echo "::warning file=README.md::$msg"
+            echo "::notice file=README.md::$msg"
           fi
           if grep -qE 'zenodo\.org/badge/[0-9]+\.svg|zenodo\.org/badge/latestdoi/' /tmp/readme.scan; then
             echo "::error file=README.md::legacy Zenodo badge form; use zenodo.org/badge/DOI/10.5281/zenodo.<CONCEPT_ID>.svg"
