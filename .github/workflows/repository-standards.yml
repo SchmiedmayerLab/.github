@@ -20,7 +20,7 @@ env:
 
 jobs:
   reuse:
-    name: REUSE
+    name: Licensing
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.4
 
   links:
@@ -88,7 +88,7 @@ jobs:
             document-start: disable
           YAMLLINT
           fi
-          yamllint -c "$config" --strict=false .github
+          yamllint -c "$config" .github
 
       - name: Trailing whitespace in .github
         run: |
