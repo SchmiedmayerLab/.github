@@ -1,16 +1,19 @@
 #
 # This source file is part of the Schmiedmayer Lab open-source organization
 #
-# SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 #
 # SPDX-License-Identifier: MIT
 #
 
 cff-version: 1.2.0
 message: "If you use this software, please cite it as below."
+type: software
 authors:
 - family-names: "Schmiedmayer"
   given-names: "Paul"
   orcid: "https://orcid.org/0000-0002-8607-9148"
-title: "Schmiedmayer Lab"
-url: "https://github.com/SchmiedmayerLab/"
+title: "Schmiedmayer Lab Organization Health Files and Reusable Workflows"
+license: MIT
+url: "https://github.com/SchmiedmayerLab/.github"
+repository-code: "https://github.com/SchmiedmayerLab/.github"

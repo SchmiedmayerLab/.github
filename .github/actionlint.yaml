@@ -1,0 +1,5 @@
+# actionlint 1.7.12 predates the self-repository `$/` reference and rejects it as malformed.
+paths:
+  .github/workflows/**:
+    ignore:
+      - 'reusable workflow call "\$/.*" at "uses" is not following the format'

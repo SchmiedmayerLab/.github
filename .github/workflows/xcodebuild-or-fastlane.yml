@@ -1,7 +1,7 @@
 #
-# This source file is part of the Stanford Biodesign Digital Health Group open-source organization
+# This source file is part of the Schmiedmayer Lab open-source organization
 #
-# SPDX-FileCopyrightText: 2022 Stanford University and the project authors (see CONTRIBUTORS.md)
+# SPDX-FileCopyrightText: 2022 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 #
 # SPDX-License-Identifier: MIT
 #
@@ -427,7 +427,9 @@ jobs:
 
                 if [ -n "${{ inputs.firebaseemulatorimport }}" ]; then
                     echo "Importing firebase emulator data from ${{ inputs.firebaseemulatorimport }}"
-                    firebase emulators:exec -c ${{ inputs.firebasejsonpath }} --import=${{ inputs.firebaseemulatorimport }} 'fastlane ${{ inputs.fastlanelane }}'
+                    firebase emulators:exec -c ${{ inputs.firebasejsonpath }} \
+                      --import=${{ inputs.firebaseemulatorimport }} \
+                      'fastlane ${{ inputs.fastlanelane }}'
                 else
                     firebase emulators:exec -c ${{ inputs.firebasejsonpath }} 'fastlane ${{ inputs.fastlanelane }}'
                 fi

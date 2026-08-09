@@ -2,7 +2,7 @@
 
 This source file is part of the Schmiedmayer Lab open-source organization
 
-SPDX-FileCopyrightText: 2026 Stanford University and the project authors (see CONTRIBUTORS.md)
+SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 
 SPDX-License-Identifier: MIT
 
@@ -10,7 +10,9 @@ SPDX-License-Identifier: MIT
 
 # Schmiedmayer Lab
 
-[![Validate Repository](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/validate.yml)
+[![Build and Test](https://github.com/SchmiedmayerLab/.github/actions/workflows/self-standards.yml/badge.svg)](https://github.com/SchmiedmayerLab/.github/actions/workflows/self-standards.yml)
+[![REUSE status](https://api.reuse.software/badge/github.com/SchmiedmayerLab/.github)](https://api.reuse.software/info/github.com/SchmiedmayerLab/.github)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SchmiedmayerLab/.github/blob/main/LICENSE.md)
 
 This repository provides default community health files, reusable GitHub Actions workflows, templates, and shared documentation for the Schmiedmayer Lab organization.
 
@@ -29,6 +31,7 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | [`eslint.yml`](#run-eslint) | Run ESLint for JavaScript and TypeScript projects. |
 | [`markdown-links.yml`](#check-markdown-links) | Check Markdown links. |
 | [`periphery.yml`](#run-periphery) | Run Periphery to detect unused Swift declarations. |
+| [`repository-standards.yml`](#check-repository-standards) | Check the organization repository baseline in one call. |
 | [`reuse.yml`](#check-reuse-compliance) | Check REUSE license and copyright metadata. |
 | [`swiftlint.yml`](#run-swiftlint) | Run SwiftLint for Swift style and quality checks. |
 
@@ -88,7 +91,7 @@ Use it for repositories that maintain their own workflows.
 jobs:
   actionlint:
     name: Lint GitHub Actions Workflows
-    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.5
     with:
       runs_on_labels: '["ubuntu-latest"]'
 ```
@@ -102,7 +105,7 @@ Use it for JavaScript and TypeScript projects with `npm run lint:ci`.
 jobs:
   eslint:
     name: Run ESLint
-    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.5
 ```
 
 ##### Check Markdown Links
@@ -115,7 +118,7 @@ Linkspector can map diagnostics to the pull request diff.
 jobs:
   markdown-links:
     name: Check Markdown Links
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
     permissions:
       contents: read
       pull-requests: read
@@ -130,7 +133,36 @@ Use it for Swift packages and Xcode projects that can be scanned from the reposi
 jobs:
   periphery:
     name: Run Periphery
-    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.5
+```
+
+##### Check Repository Standards
+
+[`repository-standards.yml`](.github/workflows/repository-standards.yml) gives a repository the whole
+organization baseline in one call: REUSE compliance, Markdown link health, and the repository surface
+— required files, `CITATION.cff`, `CONTRIBUTORS.md`, badges, README structure, copyright holder, and
+repository settings. See [REPOSITORY_STANDARDS.md](REPOSITORY_STANDARDS.md) for the standard it
+enforces.
+Use it in every repository. It takes no inputs and there is no opt-out — every rule applies
+everywhere.
+
+```yml
+name: Repository Standards
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  standards:
+    name: Standards
+    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
 ```
 
 ##### Check REUSE Compliance
@@ -142,7 +174,7 @@ Use it for repositories that follow the REUSE specification.
 jobs:
   reuse:
     name: Check REUSE Compliance
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
 ```
 
 ##### Run SwiftLint
@@ -154,7 +186,7 @@ Use it for Swift repositories that define SwiftLint rules.
 jobs:
   swiftlint:
     name: Run SwiftLint
-    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.5
 ```
 
 #### Swift and Apple Platforms
@@ -168,7 +200,7 @@ Use it after test jobs that upload coverage artifacts.
 jobs:
   coverage:
     name: Merge and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/coverage.yml@v0.5
     with:
       coveragereports: ResultBundle1.xcresult ResultBundle2.xcresult
     secrets:
@@ -189,7 +221,7 @@ permissions:
 jobs:
   docc:
     name: Deploy DocC Documentation
-    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/docc-github-pages.yml@v0.5
     with:
       scheme: ExamplePackage
 ```
@@ -203,7 +235,7 @@ Use it for Swift packages that can rely on automatic metadata detection.
 jobs:
   api-breaking-changes:
     name: Diagnose Swift API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.5
 ```
 
 ##### Diagnose Swift Package API Breaking Changes
@@ -215,7 +247,7 @@ Use it when another workflow already knows the package metadata.
 jobs:
   package-breaking-changes:
     name: Diagnose Swift Package API Breaking Changes
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-breaking-changes.yml@v0.5
     with:
       library_products: '["ExamplePackage"]'
       platform_name: ios
@@ -231,7 +263,7 @@ It detects package metadata, runs tests, uploads coverage when available, and ru
 jobs:
   swift-package-ci:
     name: Swift Package CI
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.5
     secrets: inherit
 ```
 
@@ -244,11 +276,11 @@ Use it as a setup job before lower-level Swift package workflows.
 jobs:
   setup:
     name: Set Up Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-setup.yml@v0.5
   test:
     name: Test Swift Package
     needs: setup
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.5
     with:
       package_name: ${{ needs.setup.outputs.package_name }}
       scheme: ${{ needs.setup.outputs.scheme }}
@@ -265,7 +297,7 @@ Use it when package metadata is already available from `swift-package-setup.yml`
 jobs:
   analyze:
     name: Analyze Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-static-analysis.yml@v0.5
     with:
       library_products: '["ExamplePackage"]'
       platform_name: ios
@@ -281,7 +313,7 @@ Use it when package metadata and platform matrices are provided explicitly.
 jobs:
   test:
     name: Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-package-test.yml@v0.5
     with:
       package_name: ExamplePackage
       scheme: ExamplePackage
@@ -301,7 +333,7 @@ Use it for Linux Swift package tests or simple SwiftPM test jobs.
 jobs:
   swift-test:
     name: Run Swift Tests
-    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.5
 ```
 
 ##### Build and Test with xcodebuild
@@ -320,12 +352,12 @@ jobs:
     name: Build and Test App
     permissions:
       contents: read
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.5
     with:
       runsonlabels: '["macOS", "self-hosted"]'
   package-tests:
     name: Build and Test Swift Package
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.5
     with:
       path: ExamplePackage
       runsonlabels: '["macOS", "self-hosted"]'
@@ -342,7 +374,7 @@ jobs:
     permissions:
       contents: read
       security-events: write
-    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild.yml@v0.5
     with:
       codeql: true
       scheme: TemplatePackage
@@ -358,7 +390,7 @@ Use `artifact_path` to upload command output such as an `.xcresult` bundle; the 
 jobs:
   firebase-ui-tests:
     name: Run UI Tests with Firebase Emulator
-    uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-emulators-exec.yml@v0.5
     with:
       command: bundle exec fastlane uitest
       artifact_path: fastlane/test_output/UITests.xcresult
@@ -380,7 +412,7 @@ jobs:
     name: Deploy Xcode Project
     permissions:
       contents: read
-    uses: SchmiedmayerLab/.github/.github/workflows/xcode-deploy.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcode-deploy.yml@v0.5
     with:
       command: >-
         bundle exec fastlane deploy environment:"staging"
@@ -408,7 +440,7 @@ Use it for binary distribution pipelines that package Apple platform archives.
 jobs:
   xcarchive:
     name: Build XCArchive
-    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcarchive.yml@v0.5
     with:
       workspaceFile: example.xcworkspace
       xcArchiveName: ExampleKit
@@ -424,7 +456,7 @@ Use [`xcframework.yml`](.github/workflows/xcframework.yml) to package XCArchive 
 jobs:
   xcframework:
     name: Build XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework.yml@v0.5
     with:
       workspaceFile: example.xcworkspace
       xcFrameworkName: ExampleKit
@@ -445,7 +477,7 @@ permissions:
 jobs:
   release-xcframework:
     name: Release XCFramework
-    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/xcframework-release.yml@v0.5
     with:
       version: v0.2
     secrets:
@@ -463,7 +495,7 @@ Use it for Firebase Hosting, Functions, Firestore rules, or other Firebase deplo
 jobs:
   firebase:
     name: Deploy Firebase
-    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/firebase-deploy.yml@v0.5
     with:
       arguments: --only hosting
     secrets:
@@ -486,7 +518,7 @@ permissions:
 
 jobs:
   publish:
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-publish.yml@v0.5
 ```
 
 Manual release callers pass their dispatch input as `packageVersion`.
@@ -498,7 +530,7 @@ After publication, the workflow summary provides the interactive `npm trust` com
 Repositories may define an optional `release:prepare` script for package-specific preparation after versions are synchronized.
 The workflow automatically runs `build`, `pack:check`, and `pack:lint` when those scripts exist.
 Callers pinned to an earlier release continue to use the earlier interface unchanged.
-When adopting v0.4, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
+When adopting v0.5, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
 Replace `bootstrapWithToken: true` with explicit package names in `bootstrapPackages`, or use `*` only when every unpublished package is intentionally being bootstrapped.
 
 ##### Build and Deploy npm Project Pages
@@ -516,13 +548,13 @@ permissions:
 
 jobs:
   pages:
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-pages.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-pages.yml@v0.5
 ```
 
 Call `npm run pages:build` directly in pull-request CI so that build jobs do not receive deployment permissions.
 `nodeVersionFile` and `artifactPath` are available only for repositories that cannot follow the default conventions.
 This convention also supports static Next.js exports, replacing the former framework-specific workflow.
-Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.4`.
+Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.5`.
 
 ##### Test npm Package and Upload Coverage
 
@@ -535,7 +567,7 @@ Firebase projects can enable emulator tooling with `setup-firebase-emulator: tru
 jobs:
   npm-test:
     name: Test npm Package and Upload Coverage
-    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/npm-test-coverage.yml@v0.5
     with:
       coverage-files: coverage/lcov.info
     secrets:
@@ -556,7 +588,7 @@ permissions:
 jobs:
   docker:
     name: Build and Push Docker Image
-    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-build-and-push.yml@v0.5
     with:
       imageName: schmiedmayerlab/example
 ```
@@ -570,7 +602,7 @@ Use it for projects where integration tests run against local services.
 jobs:
   docker-compose:
     name: Test Docker Compose Stack
-    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/docker-compose-test.yml@v0.5
     with:
       testscript: scripts/smoke-test.sh
 ```
@@ -589,7 +621,7 @@ permissions:
 jobs:
   release-tags:
     name: Tag Action Release
-    uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/action-release-tag.yml@v0.5
     secrets:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
     with:
@@ -605,15 +637,27 @@ Use it when another job needs the formatted notes from the `releasenotes` output
 jobs:
   release-notes:
     name: Format Release Notes
-    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/format-release-notes.yml@v0.5
     with:
       release-tag: ${{ github.ref_name }}
       repository: ${{ github.repository }}
 ```
 
+## Contributing
+
+Contributions to this project are welcome. Please make sure to read the [contribution guidelines](https://github.com/SchmiedmayerLab/.github/blob/main/CONTRIBUTING.md) and the [contributor covenant code of conduct](https://github.com/SchmiedmayerLab/.github/blob/main/CODE_OF_CONDUCT.md) first. You can find a list of contributors in the [CONTRIBUTORS.md](CONTRIBUTORS.md) file.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE.md](LICENSE.md) for more information.
+
+## Citation
+
+If you use this software, please cite it using the metadata in [CITATION.cff](CITATION.cff), which GitHub surfaces through the [*Cite this repository*](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-citation-files) button.
+
 ## Our Research
 
 For more information, visit the [Schmiedmayer Lab GitHub organization](https://github.com/SchmiedmayerLab).
 
-![Stanford and Stanford Medicine logos](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/stanford-footer-light.png#gh-light-mode-only)
-![Stanford and Stanford Medicine logos](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/stanford-footer-dark.png#gh-dark-mode-only)
+![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-light.png#gh-light-mode-only)
+![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)

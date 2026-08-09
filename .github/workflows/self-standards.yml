@@ -6,19 +6,19 @@
 # SPDX-License-Identifier: MIT
 #
 
-name: REUSE Compliance
+name: Repository Standards
 
 on:
-  workflow_call:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
-  reuse:
-    name: REUSE Compliance
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: REUSE Compliance
-        uses: fsfe/reuse-action@v6
+  standards:
+    name: Standards
+    uses: $/.github/workflows/repository-standards.yml

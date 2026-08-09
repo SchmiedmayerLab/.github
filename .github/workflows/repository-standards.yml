@@ -1,0 +1,429 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Repository Standards
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+env:
+  EXPECTED_SHARED_WORKFLOW_REF: v0.5
+
+jobs:
+  reuse:
+    name: Licensing
+    uses: $/.github/workflows/reuse.yml
+
+  links:
+    name: Docs
+    uses: $/.github/workflows/markdown-links.yml
+
+  actions:
+    name: Actions
+    uses: $/.github/workflows/actionlint.yml
+
+  surface:
+    name: Surface
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Detect repository facts
+        id: facts
+        run: |
+          private=$(gh api "repos/$REPO" --jq '.private' 2>/dev/null || echo false)
+          releases=$(gh api "repos/$REPO/releases" --jq 'length' 2>/dev/null || echo 0)
+          coverage=false
+          for wf in .github/workflows/*.y*ml; do
+            [ -f "$wf" ] || continue
+            grep -qs 'workflow_call:' "$wf" && continue
+            grep -qsE 'codecov/codecov-action|coverage\.yml@|npm-test-coverage\.yml@' "$wf" && coverage=true
+          done
+          {
+            echo "private=$private"
+            echo "releases=$releases"
+            echo "coverage=$coverage"
+          } >> "$GITHUB_OUTPUT"
+          echo "private=$private releases=$releases coverage=$coverage"
+
+      - name: Shared workflows are on the expected version
+        run: |
+          drift=$(grep -rhoE 'SchmiedmayerLab/\.github/\.github/workflows/[A-Za-z0-9._-]+@[A-Za-z0-9._/-]+' .github/workflows 2>/dev/null \
+                  | grep -v "@${EXPECTED_SHARED_WORKFLOW_REF}$" | sort -u || true)
+          if [ -n "$drift" ]; then
+            echo "::warning::shared workflow references not on ${EXPECTED_SHARED_WORKFLOW_REF}: $(echo "$drift" | tr '\n' ' ')"
+          fi
+
+      - name: Prepare a scannable README
+        run: |
+          # shellcheck disable=SC2016
+          awk '/^```/{fence=!fence; next} !fence' README.md | sed 's/`[^`]*`//g' > /tmp/readme.scan
+
+      - name: YAML in .github
+        run: |
+          python3 -m pip install --quiet yamllint
+          config=""
+          for candidate in .yamllint.yml .yamllint.yaml .yamllint; do
+            if [ -f "$candidate" ]; then config="$candidate"; break; fi
+          done
+          if [ -z "$config" ]; then
+            config=$(mktemp)
+            cat > "$config" <<'YAMLLINT'
+          extends: default
+          rules:
+            line-length:
+              max: 150
+              level: warning
+            truthy:
+              level: error
+              allowed-values: ["false", "true", "on"]
+            document-start: disable
+          YAMLLINT
+          fi
+          yamllint -c "$config" .github
+
+      - name: Trailing whitespace in .github
+        run: |
+          if git grep -nI '[[:blank:]]$' -- .github; then
+            echo "::error::trailing whitespace in .github"
+            exit 1
+          fi
+
+      - name: Required files
+        run: |
+          status=0
+          for file in README.md LICENSE.md CONTRIBUTORS.md; do
+            [ -f "$file" ] || { echo "::error file=$file::$file is required"; status=1; }
+          done
+          if [ ! -f LICENSE.md ] && [ -d LICENSES ]; then
+            echo "::error::LICENSES/ exists but the root LICENSE.md does not, so GitHub reports no licence and Zenodo inherits that"
+          fi
+          for file in CONTRIBUTING.md CODE_OF_CONDUCT.md SECURITY.md SUPPORT.md; do
+            [ "${REPO##*/}" = ".github" ] && continue
+            [ -f "$file" ] && echo "::warning file=$file::$file is provided organization-wide and should not be duplicated"
+          done
+          exit $status
+
+      - name: REUSE.toml carries no wildcard
+        run: |
+          if [ -f REUSE.toml ] && grep -qE '^[[:space:]]*path[[:space:]]*=[[:space:]]*\[?[[:space:]]*"\*\*"' REUSE.toml; then
+            echo "::error file=REUSE.toml::a blanket path = [\"**\"] annotation makes reuse lint pass without per-file headers"
+            exit 1
+          fi
+
+      - name: CITATION.cff
+        run: |
+          if [ ! -f CITATION.cff ]; then
+            echo "::error file=CITATION.cff::CITATION.cff is required so Zenodo records real authorship"
+            exit 1
+          fi
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
+          REPO="$REPO" python3 - <<'PY'
+          import os, re, sys, yaml
+          data = yaml.safe_load(open("CITATION.cff"))
+          fail = []
+          for key in ("cff-version", "message", "type", "authors", "title", "license", "url", "repository-code"):
+              if key not in data:
+                  fail.append(f"missing key: {key}")
+          for author in data.get("authors") or []:
+              if "family-names" not in author:
+                  fail.append(f"author without family-names: {author}")
+          if not data.get("authors"):
+              fail.append("authors is empty")
+          if data.get("license") and data["license"] != "MIT":
+              print(f"::notice file=CITATION.cff::license is {data['license']!r}, not MIT")
+          if data.get("type") and data["type"] != "software":
+              fail.append(f"type is {data['type']!r}, expected 'software'")
+          for key in ("abstract", "keywords"):
+              if key in data:
+                  fail.append(f"{key} belongs in the repository settings, not CITATION.cff")
+          expected = f"https://github.com/{os.environ['REPO']}"
+          for field in ("url", "repository-code"):
+              value = data.get(field)
+              if value and value.rstrip("/") != expected:
+                  fail.append(f"{field} is {value!r}, expected {expected!r} (stale after a repository rename?)")
+          try:
+              contributors = open("CONTRIBUTORS.md").read()
+          except OSError:
+              contributors = ""
+          listed = re.findall(r"^[*-]\s*\[([^\]]+)\]\(https://github\.com/", contributors, re.M)
+          missing = [f"{a.get('given-names','')} {a.get('family-names','')}".strip()
+                     for a in data.get("authors") or []
+                     if f"{a.get('given-names','')} {a.get('family-names','')}".strip() not in listed]
+          if missing:
+              fail.append(f"CITATION.cff authors absent from CONTRIBUTORS.md: {missing}")
+          for problem in fail:
+              print(f"::error file=CITATION.cff::{problem}")
+          sys.exit(1 if fail else 0)
+          PY
+
+      - name: CONTRIBUTORS.md shape
+        run: |
+          python3 - <<'PY'
+          import re, sys
+          t = open("CONTRIBUTORS.md").read()
+          fail = []
+          if not t.lstrip().startswith("<!--"):
+              fail.append("must open with the standard SPDX comment header")
+          body = re.sub(r"^\s*<!--.*?-->\s*", "", t, flags=re.S)
+          lines = [l.rstrip() for l in body.split("\n")]
+          def is_attrib(i):
+              if re.match(r"^#{1,6}\s+Attributions?\s*$", lines[i], re.I): return True
+              return bool(re.match(r"^-+$", lines[i])) and i and re.match(r"^Attributions?$", lines[i-1], re.I)
+          idx = next((i for i in range(len(lines)) if is_attrib(i)), len(lines))
+          head = lines[:idx]
+          titles = [l for l in head if re.match(r"^#{1,6}\s", l)] + \
+                   [head[i-1] for i in range(1, len(head)) if re.match(r"^=+$", head[i]) and head[i-1].strip()]
+          people = [l for l in head if re.match(r"^[*-]\s*\[[^\]]+\]\(https://github\.com/", l)]
+          stray  = [l for l in head if l.strip() and l not in titles and l not in people
+                    and not re.match(r"^[=-]+$", l) and not re.match(r"^#{1,6}\s", l)]
+          if len(titles) != 1:
+              fail.append(f"expected exactly one title before the list, found {len(titles)}")
+          if not people:
+              fail.append("no contributors listed as `* [Name](https://github.com/handle)`")
+          if stray:
+              fail.append(f"{len(stray)} line(s) between the title and the list; prose belongs under '## Attributions'")
+          for problem in fail:
+              print(f"::error file=CONTRIBUTORS.md::{problem}")
+          sys.exit(1 if fail else 0)
+          PY
+
+      - name: README structure
+        run: |
+          status=0
+          head -1 README.md | grep -q '^<!--' \
+            || { echo "::error file=README.md::README must open with the standard SPDX comment header"; status=1; }
+          # REUSE-IgnoreStart
+          grep -q 'SPDX-License-Identifier: MIT' README.md \
+            || { echo "::error file=README.md::README header is missing an SPDX licence identifier"; status=1; }
+          # REUSE-IgnoreEnd
+          for section in '## Contributing' '## License' '## Citation' '## Our Research'; do
+            grep -qF "$section" README.md || { echo "::error file=README.md::missing required section $section"; status=1; }
+          done
+          grep -q 'about-citation-files' /tmp/readme.scan \
+            || { echo "::error file=README.md::the Citation section must link GitHub's 'Cite this repository' documentation"; status=1; }
+          grep -q 'assets/footer-light.png#gh-light-mode-only' /tmp/readme.scan \
+            || { echo "::error file=README.md::missing the light-mode footer image"; status=1; }
+          grep -q 'assets/footer-dark.png#gh-dark-mode-only' /tmp/readme.scan \
+            || { echo "::error file=README.md::missing the dark-mode footer image"; status=1; }
+          stale=$(grep -oE 'https://raw\.githubusercontent\.com/SchmiedmayerLab/\.github/[^)]+' /tmp/readme.scan \
+                  | grep -vE '/assets/footer-(light|dark)\.png#gh-(light|dark)-mode-only$' || true)
+          if [ -n "$stale" ]; then
+            echo "::error file=README.md::footer images must be assets/footer-light.png and assets/footer-dark.png, found: $stale"
+            status=1
+          fi
+          if grep -E '^!\[[^]]*\]\(https://raw\.githubusercontent\.com/SchmiedmayerLab/\.github' /tmp/readme.scan \
+             | grep -qv '^!\[Schmiedmayer Lab\]'; then
+            echo "::error file=README.md::footer image alt text must be exactly 'Schmiedmayer Lab'"
+            status=1
+          fi
+          exit $status
+
+      - name: Badges match what the repository actually has
+        env:
+          IS_PRIVATE: ${{ steps.facts.outputs.private }}
+          HAS_COVERAGE: ${{ steps.facts.outputs.coverage }}
+        run: |
+          status=0
+          badges=$(grep -oE '^\[!\[[^]]+\]' /tmp/readme.scan | sed 's/^\[!\[//; s/\]$//' || true)
+          has() { echo "$badges" | grep -qxF "$1"; }
+
+          allowed='Build and Test|Deployment|CodeQL|Codecov|REUSE status|License: MIT|Release|DOI'
+          ci=$(find .github/workflows -maxdepth 1 -name '*.yml' -o -maxdepth 1 -name '*.yaml' 2>/dev/null \
+               | grep -vE '/(repository-standards|self-standards|dependabot)\.ya?ml$' | head -1 || true)
+          if [ -n "$ci" ]; then
+            has 'Build and Test' || { echo "::error file=README.md::the Build and Test badge is required"; status=1; }
+          fi
+          bad=$(echo "$badges" | grep -vE "^($allowed)$" || true)
+          if [ -n "$bad" ]; then
+            echo "::error file=README.md::non-standard badge label(s): $(echo "$bad" | tr '\n' ' ')"
+            status=1
+          fi
+
+          rank() { case "$1" in
+            'Build and Test') echo 1 ;; 'Deployment') echo 2 ;; 'CodeQL') echo 3 ;; 'Codecov') echo 4 ;;
+            'REUSE status') echo 5 ;; 'License: MIT') echo 6 ;; 'Release') echo 7 ;; 'DOI') echo 8 ;;
+            *) echo 9 ;; esac; }
+          previous=0
+          while IFS= read -r label; do
+            [ -z "$label" ] && continue
+            current=$(rank "$label")
+            if [ "$current" -lt "$previous" ]; then
+              echo "::error file=README.md::badge '$label' is out of order; expected health -> compliance -> identity"
+              status=1
+            fi
+            previous=$current
+          done <<< "$badges"
+
+          while IFS= read -r workflow; do
+            [ -z "$workflow" ] && continue
+            [ -f ".github/workflows/$workflow" ] \
+              || { echo "::error file=README.md::a badge points at .github/workflows/$workflow, which does not exist"; status=1; }
+          done <<< "$(grep -oE 'actions/workflows/[A-Za-z0-9._-]+\.ya?ml' /tmp/readme.scan | sed 's|actions/workflows/||' | sort -u)"
+          if [ -f .github/workflows/codeql.yml ] && ! has 'CodeQL'; then
+            echo "::error file=README.md::codeql.yml exists but there is no CodeQL badge"; status=1
+          fi
+
+          foreign=$(
+            { grep -oE 'https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+/actions/workflows/[A-Za-z0-9._-]+' /tmp/readme.scan \
+                | grep -v "^https://github.com/${REPO}/" || true
+              grep -oE 'https://codecov\.io/gh/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+' /tmp/readme.scan \
+                | grep -v "^https://codecov.io/gh/${REPO}$" || true
+              grep -oE 'https://api\.reuse\.software/(badge|info)/github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+' /tmp/readme.scan \
+                | grep -vE "/github\.com/${REPO}$" || true
+            } | sort -u
+          )
+          if [ -n "$foreign" ]; then
+            echo "::error file=README.md::badge(s) point at a different repository: $(echo "$foreign" | tr '\n' ' ')"
+            status=1
+          fi
+
+          if [ "$IS_PRIVATE" = "true" ]; then
+            for label in 'REUSE status' 'DOI' 'Codecov'; do
+            if has "$label"; then
+              echo "::error file=README.md::'$label' cannot resolve for a private repository"
+              status=1
+            fi
+            done
+          else
+            has 'License: MIT' || { echo "::error file=README.md::the License badge is required"; status=1; }
+            has 'REUSE status' || { echo "::error file=README.md::the REUSE badge is required on public repositories"; status=1; }
+            if [ "$HAS_COVERAGE" = "true" ] && ! has 'Codecov'; then
+              echo "::warning file=README.md::coverage is configured but there is no Codecov badge"
+            fi
+          fi
+          exit $status
+
+      - name: Releases and DOIs
+        env:
+          IS_PRIVATE: ${{ steps.facts.outputs.private }}
+          RELEASES: ${{ steps.facts.outputs.releases }}
+        run: |
+          status=0
+          if [ "$IS_PRIVATE" != "true" ] && [ "$RELEASES" -gt 0 ] && ! grep -q 'zenodo.org/badge/DOI/' /tmp/readme.scan; then
+            msg="this repository has $RELEASES release(s) but no DOI badge. Zenodo only archives releases published after the"
+            msg="$msg integration was enabled, so cut a new release and add the concept DOI."
+            echo "::warning file=README.md::$msg"
+          fi
+          if grep -qE 'zenodo\.org/badge/[0-9]+\.svg|zenodo\.org/badge/latestdoi/' /tmp/readme.scan; then
+            echo "::error file=README.md::legacy Zenodo badge form; use zenodo.org/badge/DOI/10.5281/zenodo.<CONCEPT_ID>.svg"
+            status=1
+          fi
+          doi_re='10\.5281/zenodo\.[0-9A-Za-z_]+'
+          badge=$(grep -oE "zenodo\.org/badge/DOI/$doi_re" /tmp/readme.scan | head -1 \
+                  | grep -oE "$doi_re" || true)
+          cff=$(grep -oE "^doi:[[:space:]]*$doi_re" CITATION.cff 2>/dev/null \
+                | grep -oE "$doi_re" || true)
+          if [ -n "$badge" ] && [ -n "$cff" ] && [ "$badge" != "$cff" ]; then
+            echo "::error::README badge DOI ($badge) and CITATION.cff DOI ($cff) disagree"
+            status=1
+          fi
+          if echo "$badge$cff" | grep -q 'CONCEPT_ID'; then
+            echo "::error::CONCEPT_ID placeholder is still in place; substitute the real concept DOI"
+            status=1
+          fi
+          exit $status
+
+      - name: Copyright holder
+        run: |
+          status=0
+          governed=$(echo /tmp/readme.scan; ls CITATION.cff CONTRIBUTORS.md 2>/dev/null; ls .github/workflows/*.yml 2>/dev/null || true)
+          for file in $governed; do
+            while IFS= read -r line; do
+              strip_tag='s/.*SPDX-FileCopyrightText:[[:space:]]*//'
+              strip_year='s/^[0-9]{4}(-[0-9]{4})?(,[[:space:]]*[0-9]{4})*[[:space:]]*//'
+              holder=$(echo "$line" | sed -E "$strip_tag; $strip_year")
+              case "$holder" in
+                "Schmiedmayer Lab"*|"Stanford University"*) ;;
+                *) echo "::error file=$file::copyright holder must be 'Schmiedmayer Lab and the project authors', found: $holder"
+                   status=1 ;;
+              esac
+            done < <(grep -hE '^[[:space:]]*(#|<!--|//|\*|--)?[[:space:]]*SPDX-FileCopyrightText:' "$file" 2>/dev/null || true)
+          done
+          if grep -rqE '<year>|<copyright holders>|\[yyyy\][[:space:]]*\[name of copyright owner\]' \
+               /tmp/readme.scan CITATION.cff CONTRIBUTORS.md LICENSE.md 2>/dev/null; then
+            echo "::error::an unfilled copyright placeholder is still present"
+            status=1
+          fi
+          if [ -f LICENSE.md ] && ! grep -qE 'Copyright \(c\) [0-9]{4}.*(Schmiedmayer Lab|Stanford University)' LICENSE.md; then
+            echo "::error file=LICENSE.md::LICENSE.md needs a filled-in copyright line naming Schmiedmayer Lab"
+            status=1
+          fi
+          spdx_re='^[[:space:]]*(#)?[[:space:]]*SPDX-FileCopyrightText:[[:space:]]*.*'
+          others=$(grep -rhoE "$spdx_re" . --include='*.license' --include='REUSE.toml' 2>/dev/null \
+                   | sed -E 's/.*SPDX-FileCopyrightText:[[:space:]]*//' | sort -u \
+                   | grep -vE '^[0-9]{4}.*(Schmiedmayer Lab|Stanford University)' || true)
+          if [ -n "$others" ]; then
+            echo "::notice::third-party copyright holders present: $(echo "$others" | cut -c1-80 | tr '\n' ';' | cut -c1-500)"
+          fi
+          exit $status
+
+      - name: Repository settings, description and topics
+        env:
+          IS_PRIVATE: ${{ steps.facts.outputs.private }}
+        run: |
+          meta=$(gh api "repos/$REPO" 2>/dev/null || echo '{}')
+          admin=$(echo "$meta" | jq -r 'has("allow_squash_merge")')
+          if [ "$admin" != "true" ]; then
+            echo "::notice::merge, branch and security settings need an administrative token and were not checked"
+          fi
+          get() { echo "$meta" | python3 -c "import json,sys;d=json.load(sys.stdin);v=d$1;print('' if v is None else v)" 2>/dev/null; }
+
+          if [ "$admin" = "true" ]; then
+            [ "$(get "['allow_squash_merge']")" = "True" ]  || echo "::warning::squash merging should be the only merge method"
+            [ "$(get "['allow_merge_commit']")" = "False" ] || echo "::warning::merge commits should be disabled"
+            [ "$(get "['allow_rebase_merge']")" = "False" ] || echo "::warning::rebase merging should be disabled"
+            [ "$(get "['allow_auto_merge']")" = "True" ]    || echo "::warning::auto-merge should be enabled"
+            [ "$(get "['delete_branch_on_merge']")" = "True" ] || echo "::warning::branches should be deleted on merge"
+          fi
+          [ "$(get "['has_wiki']")" = "False" ]  || echo "::warning::the wiki should be disabled"
+          [ "$(get "['has_issues']")" = "True" ] || echo "::warning::issues should be enabled"
+
+          description=$(get "['description']")
+          if [ -z "$description" ]; then
+            echo "::warning::the repository has no description"
+          fi
+
+          topics=$(echo "$meta" | python3 -c "import json,sys;print(' '.join(json.load(sys.stdin).get('topics') or []))" 2>/dev/null)
+          count=$(echo "$topics" | wc -w | tr -d ' ')
+          if [ "$count" -lt 4 ] || [ "$count" -gt 7 ]; then
+            echo "::warning::$count topic(s); the standard asks for four to seven"
+          fi
+          for t in $topics; do
+            case "$t" in *[A-Z_]*) echo "::warning::topic '$t' should be lowercase-hyphenated" ;; esac
+          done
+
+          if [ "$IS_PRIVATE" != "true" ] && [ "$admin" = "true" ] \
+             && [ "$(echo "$meta" | jq -r 'has("security_and_analysis")')" = "true" ]; then
+            sec=$(echo "$meta" | jq -r '(.security_and_analysis // {})
+                    | to_entries | map("\(.key)=\(.value.status)") | join(" ")' 2>/dev/null)
+            case "$sec" in *"secret_scanning=enabled"*) ;;
+              *) echo "::warning::secret scanning is disabled; it is free for public repositories" ;; esac
+            case "$sec" in *"secret_scanning_push_protection=enabled"*) ;;
+              *) echo "::warning::push protection is disabled; it blocks credentials before they land" ;; esac
+            case "$sec" in *"dependabot_security_updates=enabled"*) ;; *) echo "::warning::Dependabot security updates are disabled" ;; esac
+          fi
+
+          raw=$(gh api "repos/$REPO/rulesets" 2>/dev/null || echo '{}')
+          if ! echo "$raw" | python3 -c "import json,sys;sys.exit(0 if isinstance(json.load(sys.stdin),list) else 1)" 2>/dev/null; then
+            echo "::notice::branch rulesets are not readable here (private repository on the Free plan)"
+          else
+            rulesets=$(echo "$raw" | jq -r '[.[] | select(.enforcement == "active") | .name] | join(",")')
+            if [ -z "$rulesets" ]; then
+              echo "::warning::no active branch ruleset; the default branch accepts direct pushes"
+            else
+              echo "$rulesets" | grep -qi "main" || echo "::warning::active ruleset(s) '$rulesets' do not include the standard 'Main' ruleset"
+            fi
+          fi
