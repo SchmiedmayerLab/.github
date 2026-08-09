@@ -13,7 +13,13 @@ authors:
 - family-names: "Schmiedmayer"
   given-names: "Paul"
   orcid: "https://orcid.org/0000-0002-8607-9148"
-title: "SchmiedmayerLab Organization Health Files"
+title: "Schmiedmayer Lab Organization Health Files and Reusable Workflows"
+abstract: "Shared GitHub Actions workflows, community health files and the repository standard that every Schmiedmayer Lab open-source repository is held to."
 license: MIT
+keywords:
+  - github-actions
+  - reusable-workflows
+  - open-source
+  - organization-health-files
 url: "https://github.com/SchmiedmayerLab/.github"
 repository-code: "https://github.com/SchmiedmayerLab/.github"

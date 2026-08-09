@@ -232,6 +232,9 @@ statement, not a tidy-up.
 
 ## Zenodo
 
+Every repository is archived, this one included. A release without a DOI is a release nobody can
+cite, so the check warns as soon as a repository has releases and no DOI badge.
+
 1. **Paul Schmiedmayer** enables the repository at <https://zenodo.org/account/settings/github/>.
    The account that switches the integration on owns the resulting DOI records, so this is not
    delegated.
