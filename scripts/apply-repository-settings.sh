@@ -7,14 +7,7 @@
 # SPDX-License-Identifier: MIT
 #
 
-# Audits or applies the repository settings baseline in REPOSITORY_STANDARDS.md.
-#
-#   ./scripts/apply-repository-settings.sh              audit every public repository
-#   ./scripts/apply-repository-settings.sh apply        bring them to the baseline
-#   ./scripts/apply-repository-settings.sh audit REPO   audit one repository
-#
-# Applying is idempotent: a repository already at the baseline is left untouched.
-# Requires the GitHub CLI, authenticated with admin access to the organization.
+# usage: apply-repository-settings.sh [audit|apply] [repository]
 
 set -euo pipefail
 
@@ -29,15 +22,12 @@ esac
 
 command -v gh >/dev/null || { echo "the GitHub CLI is required" >&2; exit 1; }
 
-# Contexts the standards workflow reports. Required only where the caller exists,
-# because a required check that never reports blocks every merge.
-STANDARDS_CHECKS='["Standards / Surface","Standards / Licensing / Check REUSE Compliance","Standards / Links / Check Markdown Links","Standards / Actions / Actionlint"]'
+STANDARDS_CHECKS='["Standards / Surface","Standards / Licensing / Check REUSE Compliance","Standards / Links / Check Markdown Links","Standards / Actions / Run actionlint"]'
 
 has_standards_caller() {
   gh api "repos/$ORG/$1/contents/.github/workflows/repository-standards.yml" --silent >/dev/null 2>&1
 }
 
-# Adds the standards contexts to the Main ruleset, keeping every check already required.
 require_standards_checks() {
   local repo=$1 id=$2 body
   body=$(gh api "repos/$ORG/$repo/rulesets/$id" | jq --argjson add "$STANDARDS_CHECKS" '
@@ -91,7 +81,6 @@ JSON
 if [ -n "$ONLY" ]; then
   repos="$ONLY"
 else
-  # Forks mirror an upstream project and are not held to this standard.
   repos=$(gh repo list "$ORG" --limit 100 --no-archived --visibility public \
             --json name,isFork --jq '.[] | select(.isFork | not) | .name')
 fi
@@ -150,14 +139,12 @@ for repo in $repos; do
     -f 'security_and_analysis[secret_scanning_push_protection][status]=enabled'
   gh api -X PUT "repos/$ORG/$repo/automated-security-fixes" --silent
 
-  # Only create a Main ruleset where none exists. Replacing an existing one would
-  # discard the required status checks, which are chosen per repository.
+  # Creating only, never replacing: a replacement would drop the repository's status checks.
   if [ "$(echo "$rulesets" | jq -r 'if type == "array" then ([.[] | select((.name | ascii_downcase) == "main")] | length) else 1 end')" = "0" ]; then
     ruleset_payload | gh api -X POST "repos/$ORG/$repo/rulesets" --silent --input -
     main_id=$(gh api "repos/$ORG/$repo/rulesets" --jq '[.[] | select((.name | ascii_downcase) == "main")][0].id // ""' 2>/dev/null || echo "")
   fi
 
-  # Gate on the standards checks only once the repository actually runs them.
   if [ -n "$main_id" ] && has_standards_caller "$repo"; then
     require_standards_checks "$repo" "$main_id"
   fi
