@@ -357,6 +357,10 @@ jobs:
           IS_PRIVATE: ${{ steps.facts.outputs.private }}
         run: |
           meta=$(gh api "repos/$REPO" 2>/dev/null || echo '{}')
+          if [ "$(echo "$meta" | jq -r 'has("full_name")')" != "true" ]; then
+            echo "::notice::repository settings are not readable with this token; skipping the settings checks"
+            exit 0
+          fi
           get() { echo "$meta" | python3 -c "import json,sys;d=json.load(sys.stdin);v=d$1;print('' if v is None else v)" 2>/dev/null; }
 
           [ "$(get "['allow_squash_merge']")" = "True" ]  || echo "::warning::squash merging should be the only merge method"
@@ -381,7 +385,7 @@ jobs:
             case "$t" in *[A-Z_]*) echo "::warning::topic '$t' should be lowercase-hyphenated" ;; esac
           done
 
-          if [ "$IS_PRIVATE" != "true" ]; then
+          if [ "$IS_PRIVATE" != "true" ] && [ "$(echo "$meta" | jq -r 'has("security_and_analysis")')" = "true" ]; then
             sec=$(echo "$meta" | python3 -c "import json,sys;d=(json.load(sys.stdin).get('security_and_analysis') or {});print(' '.join(f\"{k}={(v or {}).get('status')}\" for k,v in d.items()))" 2>/dev/null)
             case "$sec" in *"secret_scanning=enabled"*) ;; *) echo "::warning::secret scanning is disabled; it is free for public repositories" ;; esac
             case "$sec" in *"secret_scanning_push_protection=enabled"*) ;; *) echo "::warning::secret scanning push protection is disabled; it blocks credentials before they land" ;; esac
