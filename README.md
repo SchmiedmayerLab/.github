@@ -162,7 +162,7 @@ permissions:
 jobs:
   standards:
     name: Check Repository Standards
-    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
+    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.4
 ```
 
 ##### Check REUSE Compliance

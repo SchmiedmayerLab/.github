@@ -257,7 +257,7 @@ each repository's static-analysis workflow:
 jobs:
   standards:
     name: Check Repository Standards
-    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
+    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.4
     permissions:
       contents: read
       pull-requests: read
