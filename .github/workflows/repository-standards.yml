@@ -16,20 +16,20 @@ permissions:
   pull-requests: read
 
 env:
-  EXPECTED_SHARED_WORKFLOW_REF: v0.4
+  EXPECTED_SHARED_WORKFLOW_REF: v0.5
 
 jobs:
   reuse:
     name: Licensing
-    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
 
   links:
     name: Docs
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
 
   actions:
     name: Actions
-    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.5
 
   surface:
     name: Surface

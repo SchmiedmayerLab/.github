@@ -208,8 +208,6 @@ Guidance for people editing the repository belongs in the README, not here.
 
 ## Copyright holder
 
-One form, everywhere:
-
 ```
 SPDX-FileCopyrightText: <year> Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 ```
@@ -339,7 +337,7 @@ each repository's static-analysis workflow:
 jobs:
   standards:
     name: Standards
-    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.4
+    uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
     permissions:
       contents: read
       pull-requests: read
