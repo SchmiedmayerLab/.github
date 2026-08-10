@@ -13,37 +13,35 @@ to be rediscovered per project.
 
 ## Required files
 
-| File | Purpose | Enforced by |
-|---|---|---|
-| `README.md` | Overview, badge block, usage | `repository-standards.yml` |
-| `LICENSE.md` | Root license, **detectable by GitHub and Zenodo** | `repository-standards.yml` |
-| `LICENSES/` | REUSE license texts | `reuse.yml` |
-| `REUSE.toml` | annotations for files that cannot carry a header — **no wildcards** | `reuse.yml` |
-| `CITATION.cff` | Authorship and citation metadata, read by Zenodo | `repository-standards.yml` |
-| `CONTRIBUTORS.md` | Project authors referenced by SPDX headers | `repository-standards.yml` |
+| File | Purpose |
+|---|---|
+| `README.md` | Overview, badge block, usage |
+| `LICENSE.md` | Root license, detectable by GitHub and Zenodo |
+| `LICENSES/` | REUSE license texts |
+| `REUSE.toml` | When needed: annotations for files that cannot carry a header, **no wildcards** |
+| `CITATION.cff` | Authorship and citation metadata, read by Zenodo |
+| `CONTRIBUTORS.md` | Project authors referenced by SPDX headers |
 
 `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `SUPPORT.md`, the pull request template,
 and the issue templates are inherited from `SchmiedmayerLab/.github` and must **not** be
 duplicated per repository.
 
-> **A root `LICENSE.md` is not optional.** GitHub's license detector does not read `LICENSES/`,
-> and Zenodo takes the license from GitHub's metadata. A repository with only `LICENSES/MIT.txt`
-> is archived as having no license.
+> **A root `LICENSE.md` is required.** GitHub's license detector does not read `LICENSES/`, and
+> Zenodo takes the license from GitHub's metadata. A root file named `LICENSE` is renamed.
 
 ## Badge block
 
-Directly under the `# Project Name` heading, one per line, in this order. Labels are fixed — the
-checker rejects anything else, because "Main", "CI", "Main Validation" and "Build and Test" all
-meant the same thing before this was written down.
+Directly under the `# Project Name` heading, one per line, in the order below: health → compliance
+→ identity. Labels are fixed; the check rejects any other label and any other order.
 
 | # | Label | Show it when |
 |---|---|---|
-| 1 | `Build and Test` | always — points at the repository's primary CI workflow |
+| 1 | `Build and Test` | the repository has a CI workflow; the badge points at that workflow |
 | 2 | `Deployment` | a deployment, publish, or pages workflow exists |
 | 3 | `CodeQL` | `codeql.yml` exists |
-| 4 | `Codecov` | the repository reports coverage — which every repository with a test suite should |
-| 5 | `REUSE status` | `REUSE.toml` exists **and** the repository is registered with the REUSE API |
-| 6 | `License: MIT` | always |
+| 4 | `Codecov` | coverage is configured |
+| 5 | `REUSE status` | always on a public repository |
+| 6 | `License: MIT` | always on a public repository |
 | 7 | `Release` | the product is consumed by version rather than by source |
 | 8 | `DOI` | after the first Zenodo archive exists |
 
@@ -58,18 +56,17 @@ meant the same thing before this was written down.
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.CONCEPT_ID.svg)](https://doi.org/10.5281/zenodo.CONCEPT_ID)
 ```
 
-Ordering is **health → compliance → identity**: what CI says, then what the licensing says, then
-how to cite. A badge added before its service is registered advertises a failure rather than a
-success, so add each one only once the service behind it answers.
-
 ### Rules
 
-- Use the **concept DOI**, never a per-version DOI. The concept DOI is stable across releases.
-- Use the canonical `zenodo.org/badge/DOI/…` form, never the legacy
-  `zenodo.org/badge/<github-repo-id>.svg` form. The legacy form keeps rendering when copied into a
-  different repository, which is exactly how two wrong DOIs entered this organization.
+- Add a badge only once the service behind it answers.
+- The workflow, Codecov and REUSE badge URLs name **this** repository.
+- Every workflow badge points at a file that exists under `.github/workflows/`.
+- Use the **concept DOI**, never a per-version DOI.
+- Use the canonical `zenodo.org/badge/DOI/…` form, never `zenodo.org/badge/<id>.svg` or
+  `zenodo.org/badge/latestdoi/…`.
+- The badge DOI and the `CITATION.cff` DOI are the same, with `CONCEPT_ID` substituted.
 - **Enable coverage reporting** wherever there is a test suite. A public repository uploads to
-  Codecov without a token, so there is no secret to manage and no reason to skip it.
+  Codecov without a token.
 - Screenshots and figures go below the badge block, never interleaved with it.
 
 ## README structure
@@ -113,37 +110,26 @@ For more information, visit the [Schmiedmayer Lab GitHub organization](https://g
 ![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)
 ```
 
-The first line names the **project**: `part of the PROJECT open-source project`. This repository is
-the one exception — it is not a project, so its own files say `open-source organization`. Do not
-copy that wording into a repository.
+The first line names the **project**: `part of the PROJECT open-source project`.
 
-Project-specific notes — provenance, documentation links, issue trackers — belong inside
-`## Contributing`, after the standard paragraph. Everything else in the footer is fixed text so it
-can be checked mechanically.
+`## Contributing`, `## License`, `## Citation` and `## Our Research` are fixed text. Provenance and
+upstream credit go in `CONTRIBUTORS.md` under `## Attributions`; anything else a repository needs to
+say goes above these sections. The license link is always `LICENSE.md`.
 
-The license link is always `LICENSE.md`. A repository whose root license file is named `LICENSE`
-should be renamed, so that one link works everywhere.
+**Every file the project owns names the same project as the README.** A file whose
+`SPDX-FileCopyrightText` names a third party keeps its own project line. A package merged in under
+the project's own copyright is not third party: it takes the project name.
 
-### Footer assets are deliberately generically named
+### Footer assets
 
-`assets/footer-light.png` and `assets/footer-dark.png`, with the alt text `Schmiedmayer Lab`.
-
-Nothing in the name or the alt text describes which logos the image contains, so adding, removing
-or reordering logos is a change in this repository alone — no README anywhere needs to be touched.
+`assets/footer-light.png` and `assets/footer-dark.png`, with the alt text `Schmiedmayer Lab`. The
+filenames, the `#gh-light-mode-only` and `#gh-dark-mode-only` fragments and the alt text are fixed.
 
 ### `REUSE.toml` carries no wildcard
 
-Every file carries its own SPDX header. A blanket `path = ["**"]` annotation makes `reuse lint`
-pass whether or not anyone writes one, so the repository stops being self-describing and nobody
-notices. Annotate only what genuinely cannot carry a header.
-
-Two rules that are easy to get wrong: vendored files keep their **own** licence rather than the
-project's, and when several annotations match the same path the **last** one wins.
-
-### Documentation is not content
-
-The checker strips fenced code blocks before scanning the README, so a repository can document
-badge markup or an SPDX header without those examples being read as the real thing.
+Every file carries its own SPDX header. Annotate only what cannot carry one; a blanket
+`path = ["**"]` annotation fails the check. Vendored files keep their **own** licence. When several
+annotations match the same path, the **last** one wins.
 
 ## Private repositories
 
@@ -158,20 +144,34 @@ The checker reads visibility from the API and adapts; nothing is configured per 
 | `DOI` badge | after first archive | **forbidden** |
 | `Codecov` badge | when coverage is configured | **forbidden** |
 
-`api.reuse.software`, Zenodo and Codecov cannot see a private repository, so those badges render an
-error rather than a status. They become required in the normal way once a repository is made public.
+`api.reuse.software`, Zenodo and Codecov cannot see a private repository. Those badges become
+required in the normal way once a repository is made public.
 
-## `CITATION.cff` and `CONTRIBUTORS.md` must match
+## `CITATION.cff`
 
-`CITATION.cff` is the authority for **authorship** — who to cite. `CONTRIBUTORS.md` lists
-**everyone who contributed**, which is a superset, and it is where upstream attributions live under
-`## Attributions`. The check requires every `CITATION.cff` author to appear in `CONTRIBUTORS.md`; it
-does not require the reverse, and it does not care about order.
+```yaml
+cff-version: 1.2.0
+message: If you use this software, please cite it as below.
+type: software
+title: PROJECT
+authors:
+  - given-names: NAME
+    family-names: NAME
+license: MIT
+url: https://github.com/SchmiedmayerLab/REPO
+repository-code: https://github.com/SchmiedmayerLab/REPO
+doi: 10.5281/zenodo.CONCEPT_ID
+```
 
+All of these are enforced:
+
+1. Every key above except `doi` is required, and `type` is `software`.
+2. `authors` is never empty, and every author carries `family-names`.
+3. `url` and `repository-code` name this repository, and are updated after a rename.
+4. No `abstract` and no `keywords`. Zenodo takes both from the repository description and topics.
+5. `doi` is the concept DOI, added after the first archive.
 
 ## `CONTRIBUTORS.md` shape
-
-Minimal and uniform, so it can be read and checked at a glance:
 
 ```markdown
 <!--
@@ -188,20 +188,14 @@ SPDX-License-Identifier: MIT
 
 * [Name](https://github.com/handle)
 * [Name](https://github.com/handle)
-
-## Attributions
-
-One or two sentences pointing at the upstream repositories this project builds on.
 ```
 
-Four rules, all enforced:
+All of these are enforced:
 
 1. Opens with the standard SPDX comment header.
 2. Exactly **one** title before the list.
-3. The list matches `CITATION.cff` exactly — same people, same order.
-4. Every contributor is a link entry, `* [Name](https://github.com/handle)`; only link entries are
-   compared.
-5. **No prose between the title and the list.** Anything explanatory goes under an optional
+3. Every contributor is a link entry, `* [Name](https://github.com/handle)`.
+4. **No prose between the title and the list.** Anything explanatory goes under an optional
    `## Attributions` heading at the end, which is the only additional heading allowed.
 
 Guidance for people editing the repository belongs in the README, not here.
@@ -212,67 +206,54 @@ Guidance for people editing the repository belongs in the README, not here.
 SPDX-FileCopyrightText: <year> Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 ```
 
-`LICENSE.md` and `LICENSES/*.txt` carry the same holder, filled in — this organization does not
-ship the SPDX placeholder text:
+`LICENSE.md` and `LICENSES/*.txt` carry the same holder, filled in:
 
 ```
 Copyright (c) <year> Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 ```
 
-The checker fails a governed file (`README.md`, `CITATION.cff`, `CONTRIBUTORS.md`,
-`.github/workflows/*.yml`) with an unrecognised holder, an unfilled `<year>` or
-`<copyright holders>` placeholder, or a `LICENSE.md` with no filled copyright line.
+Governed files (`README.md`, `CITATION.cff`, `CONTRIBUTORS.md`, `.github/workflows/*.yml`) name
+`Schmiedmayer Lab` or `Stanford University` as the holder. No unfilled placeholder remains in the
+README, `CITATION.cff`, `CONTRIBUTORS.md` or `LICENSE.md`: `<year>`, `<copyright holders>`, or the
+stock `[yyyy] [name of copyright owner]`.
 
-### Third-party files keep their own holder
-
-Vendored assets — build tooling, fonts, vendor-supplied media, third-party logos — legitimately
-carry other holders and other licences, including proprietary ones. The checker reports them as a
-notice so they stay visible, and never fails on them. Claiming the project licence over redistributed third-party files is a false
-statement, not a tidy-up.
+A file whose `SPDX-FileCopyrightText` names a third party keeps its own holder and its own licence,
+recorded in `REUSE.toml` or a `.license` file. The check reports those holders as a notice and
+never fails on them.
 
 ## Zenodo
 
-Every repository is archived, this one included. A release without a DOI is a release nobody can
-cite, so the check warns as soon as a repository has releases and no DOI badge.
-
-Zenodo takes the record's description and keywords from the repository description and topics, not
-from `CITATION.cff`. Adding `abstract` or `keywords` to the citation file creates a second copy that
-goes stale, so the check rejects both.
+Every repository is archived, this one included. A public repository with releases and no DOI badge
+raises a warning.
 
 1. **Paul Schmiedmayer** enables the repository at <https://zenodo.org/account/settings/github/>.
-   The account that switches the integration on owns the resulting DOI records, so this is not
-   delegated.
+   The account that switches the integration on owns the resulting DOI records.
 2. Land the `CITATION.cff` **before** the next release. Zenodo reads the file from the tarball at
    the tag, so metadata merged afterwards does not appear in that DOI record.
-3. Publish a release. Only releases published *after* the integration is enabled are archived —
+3. Publish a release. Only releases published *after* the integration is enabled are archived;
    existing tags are never picked up retroactively.
 4. Copy the concept DOI into the README badge and into `CITATION.cff` as `doi:`.
-
-## No opt-out
-
-The workflow takes no inputs. Every rule applies to every repository — REUSE compliance, the
-Markdown link check, and `CITATION.cff` included. A repository that does not yet meet the standard
-is brought up to it; it is not exempted from it.
 
 ## Repository settings
 
 Settings live outside the repository, so they cannot travel in a pull request. The standards
 workflow reports on them as warnings rather than failures, because a pull request author cannot
-change them.
+change them. Merge methods, branch deletion and the security settings are administrative fields
+GitHub withholds from the read-only token a workflow runs with, so CI cannot check them. Run the
+script below with an administrative token to check the whole baseline.
 
-It can only see part of them. Merge methods, branch deletion and the security settings are
-administrative fields that GitHub withholds from the read-only token a workflow runs with, so those
-are never checked in CI — the description, topics, wiki and issues are. Run the script below with an
-administrative token to check the rest.
-
-| Setting | Value | Why |
+| Setting | Value | |
 |---|---|---|
-| Merge methods | **squash only** | Merge commits break linear history; rebase merges lose the pull request as the unit of change. |
-| Auto-merge | **enabled** | A pull request lands when its checks pass, without a second visit. |
-| Delete branch on merge | **enabled** | Otherwise the branch list becomes an archaeology exercise. |
+| Description | **set** | Zenodo takes the record description from it. |
+| Topics | **four to seven, lowercase-hyphenated** | Zenodo takes the record keywords from them. |
+| Issues | **enabled** | |
+| Wiki | **disabled** | |
+| Merge methods | **squash only** | |
+| Auto-merge | **enabled** | |
+| Delete branch on merge | **enabled** | |
 | Secret scanning | **enabled** | Free on public repositories. |
-| Push protection | **enabled** | Blocks a credential before it lands rather than reporting it afterwards. |
-| Dependabot security updates | **enabled** | Advisories become pull requests without anyone watching a feed. |
+| Push protection | **enabled** | |
+| Dependabot security updates | **enabled** | |
 | Branch ruleset | **`Main`, active** | Below. |
 
 ### The `Main` ruleset
@@ -285,7 +266,7 @@ Targets `~DEFAULT_BRANCH`; organization admins and the maintain role bypass.
 | `required_linear_history` | matches squash-only merging |
 | `required_signatures` | every commit on the default branch is signed |
 | `pull_request` | one approval, conversation resolution required, squash only |
-| `required_status_checks` | **per repository** — the one part that differs, because the checks differ |
+| `required_status_checks` | **per repository** |
 
 ### Applying it
 
@@ -298,22 +279,20 @@ whole baseline. Auditing is the default and changes nothing:
 ./scripts/apply-repository-settings.sh audit REPO   # one repository
 ```
 
-Applying is idempotent, and it creates a `Main` ruleset only where none exists — replacing an
-existing one would discard that repository's status checks. Where the repository already calls
-`repository-standards.yml`, the script also adds the four `Standards / …` contexts to the required
-checks, merging them into whatever is required already. It does that **only** where the caller
-exists, because a required check that never reports blocks every merge. Audit mode exits non-zero when it finds
-drift, so it also works as a scheduled check. Forks are skipped; they mirror an upstream project.
+Applying is idempotent, and it creates a `Main` ruleset only where none exists. Where the repository
+already calls `repository-standards.yml`, the script adds the four `Standards / …` contexts to the
+required checks, merging them into whatever is required already. It does that **only** where the
+caller exists, because a required check that never reports blocks every merge. Audit mode exits
+non-zero when it finds drift. Forks are skipped.
 
 The script is the definition. When the baseline changes, change the script and this section
 together.
 
 ### Dependabot grouping has no API
 
-The script cannot set it, because GitHub does not expose it: `security_and_analysis` has no grouping
-field, neither does the organization code-security configuration, and there is no endpoint under
-`repos/{owner}/{repo}/dependabot/`. It is configured in `.github/dependabot.yml`, so it travels in a
-pull request. One weekly pull request across every ecosystem:
+GitHub exposes no endpoint for it, so the script cannot set it. It is configured in
+`.github/dependabot.yml` and travels in a pull request. One weekly pull request across every
+ecosystem:
 
 ```yaml
 version: 2
@@ -340,10 +319,21 @@ limit, not drift.
 
 ## Enforcement
 
-Documentation alone drifts. `repository-standards.yml` in this repository is a reusable workflow
-that fails a pull request when a required file is missing, when `CITATION.cff` does not parse,
-when the badge block is out of order, or when the legacy Zenodo badge form is used. Call it from
-each repository's static-analysis workflow:
+`repository-standards.yml` in this repository is a reusable workflow. It runs four jobs, Licensing,
+Docs, Actions and Surface, and fails a pull request on any of them. It takes no inputs: every rule
+applies to every repository. A repository that does not yet meet the standard is brought up to it;
+it is not exempted from it.
+
+Every file under `.github` passes `yamllint` and carries no trailing whitespace. A repository
+`.yamllint.yml`, `.yamllint.yaml` or `.yamllint` is used if present, otherwise the default
+configuration with `document-start` disabled, `truthy` limited to `true`, `false` and `on`, and a
+150-character line-length warning.
+
+Examples inside code fences are not read as the real thing, so a README can show badge markup or an
+SPDX header.
+
+Call the workflow from each repository's static-analysis workflow. Every reference to a
+`SchmiedmayerLab/.github` shared workflow is pinned to the current release tag, the one shown here:
 
 ```yaml
 jobs:

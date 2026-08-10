@@ -11,6 +11,7 @@ SPDX-License-Identifier: MIT
 # Schmiedmayer Lab .github Contributors
 
 * [Paul Schmiedmayer](https://github.com/PSchmiedmayer)
+* [Lukas Kollmer](https://github.com/lukaskollmer)
 
 
 ## Attributions
