@@ -42,6 +42,11 @@ Contributors can add themselves to `CONTRIBUTORS.md` in a pull request with a si
 
 If your code is based on another source, you must add a reference to the original source in the relevant code (e.g., using a comment) and make sure that the original source license allows usage under the license used in the project.
 
+## Data in Contributions
+
+Source, tests, examples, screenshots and logs must contain synthetic data only. Never commit
+credentials, protected health information, participant-level data, or private deployment logs.
+
 ## Bug Reporting
 
 We use GitHub issues to track public bugs. Report a bug by opening a new issue using the bug issue template.
