@@ -219,9 +219,10 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.5
 ```
 
+**Secrets:** none.
+
 #### Swift and Apple Platforms
 
-**Secrets:** none.
 
 ##### Merge and Upload Coverage
 
@@ -592,9 +593,10 @@ jobs:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
 
+**Secrets:** `access-token`
+
 #### Android
 
-**Secrets:** `access-token`
 
 ##### Android Build, Test, and Analysis
 
@@ -743,9 +745,10 @@ own, before a release, when Play credentials are rotated.
     secrets: inherit
 ```
 
+**Secrets:** `SERVICE_ACCOUNT_JSON_KEY`
+
 #### Web, Node.js, and Firebase
 
-**Secrets:** `SERVICE_ACCOUNT_JSON_KEY`
 
 ##### Deploy Firebase
 
@@ -841,9 +844,10 @@ jobs:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```
 
+**Secrets:** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`, `token`
+
 #### Containers
 
-**Secrets:** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`, `token`
 
 ##### Build and Push Docker Image
 
@@ -878,9 +882,10 @@ jobs:
       testscript: scripts/smoke-test.sh
 ```
 
+**Secrets:** `ENV_FILE`
+
 #### Releases
 
-**Secrets:** `ENV_FILE`
 
 ##### Tag Action Release
 
@@ -918,6 +923,8 @@ jobs:
       repository: ${{ github.repository }}
 ```
 
+**Secrets:** none.
+
 ## Contributing
 
 Contributions to this project are welcome. Please make sure to read the [contribution guidelines](https://github.com/SchmiedmayerLab/.github/blob/main/CONTRIBUTING.md) and the [contributor covenant code of conduct](https://github.com/SchmiedmayerLab/.github/blob/main/CODE_OF_CONDUCT.md) first. You can find a list of contributors in the [CONTRIBUTORS.md](CONTRIBUTORS.md) file.
@@ -936,6 +943,3 @@ For more information, visit the [Schmiedmayer Lab GitHub organization](https://g
 
 ![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-light.png#gh-light-mode-only)
 ![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)
-
-**Secrets:** none.
-

@@ -47,6 +47,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Read the Ruby Version
         id: toolchain
@@ -68,6 +70,7 @@ jobs:
       - name: Validate Google Play Access
         env:
           SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
+          APPLICATION_ID: ${{ vars.APP_IDENTIFIER }}
         run: >-
           bundle exec fastlane validate_play_access
-          applicationid:"${{ vars.APP_IDENTIFIER }}"
+          applicationid:"$APPLICATION_ID"

@@ -122,6 +122,7 @@ jobs:
       - name: Checkout Repository and Tags
         uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
 
       - name: Resolve the Track, Version and Toolchain
@@ -198,6 +199,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Set Up JDK ${{ needs.configuration.outputs.java }}
         uses: actions/setup-java@v5
@@ -263,11 +266,14 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
           RELEASE_NOTES: ${{ inputs.releasenotes }}
+          TRACK: ${{ needs.configuration.outputs.track }}
+          APPLICATION_ID: ${{ vars.APP_IDENTIFIER }}
+          VERSION_NAME: ${{ needs.configuration.outputs.version }}
         run: >-
           bundle exec fastlane deployment
-          environment:"${{ needs.configuration.outputs.track }}"
-          applicationid:"${{ vars.APP_IDENTIFIER }}"
-          versionname:"${{ needs.configuration.outputs.version }}"
+          environment:"$TRACK"
+          applicationid:"$APPLICATION_ID"
+          versionname:"$VERSION_NAME"
 
   record_version:
     name: Record the Published Version

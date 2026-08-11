@@ -42,12 +42,16 @@ jobs:
           reference = readme[readme.index("### Workflow Reference"):]
           catalog = set(re.findall(r"^\| \[`([\w.-]+\.yml)`\]", readme, re.M))
 
+          # a workflow entry ends at the next heading of level five or higher, not only at the next #####
           sections = {}
-          chunks = re.split(r"(?m)^(##### .*)$", reference)
+          chunks = re.split(r"(?m)^(#{1,5} .*)$", reference)
           for i in range(1, len(chunks), 2):
-              m = re.search(r"\]\(\.github/workflows/([\w.-]+\.yml)\)", chunks[i + 1])
+              if not chunks[i].startswith("##### "):
+                  continue
+              body = chunks[i + 1]
+              m = re.search(r"\]\(\.github/workflows/([\w.-]+\.yml)\)", body)
               if m:
-                  sections[m.group(1)] = chunks[i + 1]
+                  sections[m.group(1)] = body
 
           failed = False
           samples, accepts = {}, {}

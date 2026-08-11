@@ -85,6 +85,8 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Read the Project Toolchain
         id: toolchain
@@ -147,11 +149,13 @@ jobs:
         env:
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          APPLICATION_ID: ${{ vars.APP_IDENTIFIER }}
+          VERSION_NAME: ${{ inputs.version }}
         run: >-
           bundle exec fastlane bootstrap_bundle
-          applicationid:"${{ vars.APP_IDENTIFIER }}"
+          applicationid:"$APPLICATION_ID"
           versioncode:1
-          versionname:"${{ inputs.version }}"
+          versionname:"$VERSION_NAME"
 
       - name: Upload the Signed Bundle
         uses: actions/upload-artifact@v7

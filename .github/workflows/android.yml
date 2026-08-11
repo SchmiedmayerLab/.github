@@ -90,6 +90,8 @@ jobs:
       lfs: ${{ steps.detect.outputs.lfs }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: Read the project configuration
         id: detect
@@ -149,6 +151,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
@@ -178,6 +182,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
@@ -232,6 +238,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           lfs: ${{ needs.detect.outputs.lfs == 'true' }}
       - uses: actions/setup-java@v5
         with:
@@ -273,6 +280,8 @@ jobs:
         target: ${{ fromJson(inputs.emulatortargets) }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-java@v5
         with:
           distribution: 'temurin'
