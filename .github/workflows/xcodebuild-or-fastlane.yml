@@ -427,6 +427,7 @@ jobs:
           FIREBASE_EMULATOR_IMPORT: ${{ inputs.firebaseemulatorimport }}
           FASTLANE_LANE: ${{ inputs.fastlanelane }}
         run: |
+            # shellcheck disable=SC2016  # emulators:exec runs the script, so it expands the lane
             if [ "$SETUP_FIREBASE_EMULATOR" = "true" ]; then
                 # The functions directory sits next to firebase.json, which is not always the repository root.
                 npm --prefix "$(dirname "$FIREBASE_JSON_PATH")/functions" install || true
@@ -439,9 +440,9 @@ jobs:
                     echo "Importing firebase emulator data from $FIREBASE_EMULATOR_IMPORT"
                     firebase emulators:exec -c "$FIREBASE_JSON_PATH" \
                       --import="$FIREBASE_EMULATOR_IMPORT" \
-                      "fastlane $FASTLANE_LANE"
+                      'fastlane "$FASTLANE_LANE"'
                 else
-                    firebase emulators:exec -c "$FIREBASE_JSON_PATH" "fastlane $FASTLANE_LANE"
+                    firebase emulators:exec -c "$FIREBASE_JSON_PATH" 'fastlane "$FASTLANE_LANE"'
                 fi
             else
                 fastlane "$FASTLANE_LANE"

@@ -65,9 +65,10 @@ on:
     secrets:
       KEY_STORE:
         description: |
-          Base64 of the Play upload keystore. Create it once with the Google Play Bootstrap workflow,
-          or export the existing key with keytool, then `base64 -i upload-keystore.jks`.
-          Store it on the deployment environment, not the repository.
+          Base64 of the Play upload keystore. Generate the keystore with
+          `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9125 -keystore upload-keystore.jks`,
+          then `base64 -i upload-keystore.jks`. Store it on the deployment environment, not the
+          repository.
         required: false
       KEY_ALIAS:
         description: |
