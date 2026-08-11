@@ -20,15 +20,11 @@ This repository provides default community health files, reusable GitHub Actions
 
 This repository publishes reusable GitHub Actions workflows for common Schmiedmayer Lab project tasks.
 Use them from another repository with `jobs.<job_id>.uses` and a version tag.
-Each workflow documents its own inputs and secrets in its `workflow_call` block — what a value is,
-and how to obtain it. That block is the reference; this file describes what the workflows are for and
-how to call them.
+Each workflow documents its own inputs and secrets in its `workflow_call` block.
 
 ### Secrets and Repository Setup
 
-Which secrets a workflow takes, and what each one is, is declared in that workflow's `workflow_call`
-block. What follows is the part that is not per-workflow: where a value belongs, and what a repository
-has to be set to.
+Where a value belongs:
 
 | Scope | When to use it |
 |---|---|
@@ -37,28 +33,13 @@ has to be set to.
 | Environment secret | The value differs per deployment target, or the deployment should require approval. |
 | Repository or environment variable | Not sensitive: project identifiers, bundle identifiers, feature flags. |
 
-**Deployment credentials belong in an environment**, not in a repository secret. An environment is the
-only one of these that can withhold a value until a reviewer approves the run, and the only one that
-lets staging and production hold different values under the same name.
+Deployment credentials belong on an environment. It is the only scope that can withhold a value until
+a reviewer approves the run, and the only one where staging and production can hold different values
+under the same name. A job that calls a reusable workflow cannot set `environment:` itself, so those
+workflows declare it on their own jobs.
 
-Two consequences worth knowing:
-
-- A job that calls a reusable workflow **cannot set `environment:`**. Workflows that need an
-  environment declare it on their own jobs, which is what makes environment-scoped secrets and
-  variables resolve. `secrets: inherit` passes organization and repository secrets; the environment's
-  own values are read by the called job.
-- The name a repository stores a secret under does not have to match the name the workflow takes. A
-  repository with several deployment targets may hold `..._PRODUCTION_US` and `..._PRODUCTION_UK` and
-  pass whichever applies into the single secret the workflow declares. Those caller-side names are a
-  repository's own business.
-
-Encode binary material — keystores, certificates, provisioning profiles, service account keys, plist
-and JSON configuration — as Base64, and say so in the name with a `_BASE64` suffix where the workflow
-does.
-
-Public repositories do not need a Codecov token: Codecov accepts tokenless uploads from public
-repositories, and the shared workflows set `fail_ci_if_error: false` so a missing token cannot fail a
-build. Private repositories still need one.
+Encode binary material as Base64 and give the secret a `_BASE64` suffix. Public repositories do not
+need a Codecov token; private ones do.
 
 #### Repository baseline
 
@@ -76,11 +57,10 @@ audits and re-applies it. Run it after creating a repository.
 | Default workflow permissions | read |
 | Required status checks | the four `Standards / …` contexts |
 
-**Default workflow permissions are read.** A job starts with `contents: read` and `packages: read` and
-nothing else. Any job calling a reusable workflow that needs more must say so, and declaring a
-`permissions:` block **replaces** the default rather than adding to it — list every scope the job
-needs, not just the extra one. `repository-standards.yml` fails a pull request when a caller grants
-less than the workflow it calls requires.
+Because the default is read, a job starts with `contents: read` and `packages: read` and nothing
+else. Declaring a `permissions:` block **replaces** that default rather than adding to it, so list
+every scope the job needs. `repository-standards.yml` fails a pull request when a caller grants less
+than the workflow it calls requires.
 
 ### Workflow Catalog
 
@@ -584,23 +564,11 @@ jobs:
 
 ##### Android Build, Test, and Analysis
 
-[`android.yml`](.github/workflows/android.yml) runs the standard Android pipeline. It reads the
-project rather than asking for configuration: the JDK version comes from `jvmToolchain(…)` or
-`JavaVersion.VERSION_…` in the Gradle build, the Ruby version from `.ruby-version`, the Detekt
-configuration from the first of `internal/detekt-config.yml`, `config/detekt/detekt.yml`,
-`detekt.yml` or `.detekt.yml`, and the screenshot and instrumented test jobs run only when the
-matching `screenshotTests` and `connectedCheck` lanes exist in `fastlane/Fastfile`. Git LFS is
-enabled for the screenshot job when `.gitattributes` declares an LFS filter.
-
-A repository with a conventional layout needs no inputs at all.
+[`android.yml`](.github/workflows/android.yml) runs Detekt, unit tests, CodeQL, screenshot tests and
+instrumented tests. It reads the JDK, the Ruby version, the Detekt configuration and the available
+Fastlane lanes from the project, so a conventional repository passes no inputs.
 
 ```yml
-name: Build, Test and Analyze
-
-on:
-  workflow_dispatch:
-  workflow_call:
-
 jobs:
   android:
     name: Android
@@ -613,38 +581,12 @@ jobs:
     secrets: inherit
 ```
 
-
-The repository owns its Fastlane lanes. `test` is required; `screenshotTests` and `connectedCheck`
-are optional and enable their jobs when present.
-
-Coverage is uploaded as JaCoCo XML from both the unit test and the instrumented test runs. Codecov
-cannot ingest JaCoCo's HTML output, only the XML.
-
-Turn instrumented coverage on by default in the build convention, and include
-`build/outputs/code_coverage/debugAndroidTest/connected/**/*.ec` in the `jacocoCoverageReport`
-execution data.
-
-A module whose dependency closure contains a class JaCoCo cannot instrument has to opt out. HAPI FHIR
-is one: its generated `JsonParser` is a 2 MB class, and instrumentation pushes it past the JVM class
-size limit, so the build fails at `mergeExtDex` with `ClassTooLargeException`. Neither a newer HAPI
-nor a newer JaCoCo helps, and there is no narrower remedy — `JacocoTransform` takes only a JaCoCo
-version, the `testCoverage` DSL only `jacocoVersion`, and JaCoCo has declined to skip oversized
-classes. The module is the smallest unit that can opt out, so opt out there and record why.
-
-Documentation deployment is deliberately not part of this workflow. A job that pushes to `gh-pages`
-needs `contents: write`, which a pull request caller should not grant — keep it in a separate
-workflow triggered on `push` to `main`.
-
 ##### Android Google Play Deployment
 
-[`android-google-play.yml`](.github/workflows/android-google-play.yml) resolves the version, writes the
-signing material, and runs the `deployment` Fastlane lane. The JDK and Ruby versions are detected the
-same way as `android.yml`.
-
-The environment is declared inside this workflow rather than in the caller, because a job that calls a
-reusable workflow cannot set `environment:`. That placement is also what makes environment-scoped
-secrets and variables resolve: `APP_IDENTIFIER`, the signing secrets and the service account key are
-read from the environment this workflow runs in.
+[`android-google-play.yml`](.github/workflows/android-google-play.yml) signs the app and publishes it
+to a Google Play track. Name the deployment environments after the tracks — `internal`, `alpha`,
+`beta`, `production` — so the environment carries that track's credentials and `track` never has to
+be passed.
 
 ```yml
   google_play:
@@ -652,36 +594,18 @@ read from the environment this workflow runs in.
     needs: android
     uses: SchmiedmayerLab/.github/.github/workflows/android-google-play.yml@v0.5
     permissions:
-      contents: read
+      contents: write
     secrets: inherit
     with:
-      environment: staging
+      environment: internal
+      recordversion: true
 ```
-
-
-**Name the environments after the Play tracks.** Google Play publishes to `internal`, `alpha`, `beta`
-and `production`, so a GitHub environment carries each track's credentials under the same name. The
-track is then the environment, `internal` is the default everywhere, and no project passes `track` at
-all. Put `APP_IDENTIFIER` and the signing credentials on those environments so a production upload
-requires the approval the environment enforces. The input exists for the case
-where a project publishes to a track that has no environment of its own — but prefer creating the
-environment, because a track offered as an environment that does not exist silently produces an empty
-environment with no credentials.
-
-`app.versionName` in `gradle.properties` is the declared version in every Android project, so
-`versionproperty` never has to be passed either. The Gradle build reads the same key, and with
-`recordversion` the deployment writes the published version back to it, which keeps the repository,
-the tag and the store in agreement.
-
-Everything else — the bundle path, mapping path, metadata directory and signing configuration — stays
-in the project's `Fastfile`. This workflow moves bytes into place and invokes a lane; it does not
-duplicate what `APP_CONFIG` already declares.
 
 ##### Android Google Play Bootstrap
 
 [`android-google-play-bootstrap.yml`](.github/workflows/android-google-play-bootstrap.yml) builds the
-first signed bundle, the one Google Play requires before a listing exists. It runs the
-`bootstrap_bundle` lane and uploads the result as an artifact.
+first signed bundle, which Google Play requires before a listing exists, and uploads it as an
+artifact.
 
 ```yml
   signed_bundle:
@@ -695,12 +619,11 @@ first signed bundle, the one Google Play requires before a listing exists. It ru
       version: 1.0.0
 ```
 
-
 ##### Android Google Play Access Check
 
-[`android-google-play-access.yml`](.github/workflows/android-google-play-access.yml) runs the
-`validate_play_access` lane to confirm the service account can reach the application. Useful on its
-own, before a release, when Play credentials are rotated.
+[`android-google-play-access.yml`](.github/workflows/android-google-play-access.yml) checks that the
+Play service account can reach the application. Run it before a release, or after rotating
+credentials.
 
 ```yml
   google_play_access:
