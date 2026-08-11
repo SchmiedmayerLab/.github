@@ -644,9 +644,10 @@ jobs:
 The repository owns its Fastlane lanes. `test` is required; `screenshotTests` and `connectedCheck`
 are optional and enable their jobs when present.
 
-Coverage is uploaded from the JaCoCo XML the unit test run produces. Instrumented coverage is not
-uploaded: collecting it needs `enableAndroidTestCoverage` and connected execution data wired into the
-JaCoCo task, which no project does today.
+Coverage is uploaded as JaCoCo XML from both the unit test and the instrumented test runs. A project
+collects instrumented coverage by setting `enableAndroidTestCoverage = true` on its debug build type
+and including `build/outputs/code_coverage/debugAndroidTest/connected/**/*.ec` in the
+`jacocoCoverageReport` execution data. Codecov cannot ingest JaCoCo's HTML output, only the XML.
 
 Documentation deployment is deliberately not part of this workflow. A job that pushes to `gh-pages`
 needs `contents: write`, which a pull request caller should not grant — keep it in a separate

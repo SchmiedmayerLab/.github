@@ -356,3 +356,13 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: bundle exec fastlane connectedCheck
+      - name: Build the Coverage Report
+        run: ./gradlew jacocoCoverageReport --no-daemon
+      - name: Upload Instrumented Test Coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: '**/build/reports/jacoco/jacocoCoverageReport/jacocoCoverageReport.xml'
+          flags: uitests
+          name: codecov-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
