@@ -86,39 +86,33 @@ jobs:
           swift_package_args=()
 
           case "$platform_name" in
-            macos)
-              echo "Using host macOS SDK"
-              ;;
-            ios)
-              sdk_path="$(xcrun --sdk iphonesimulator --show-sdk-path)"
-              swift_package_args=(--sdk "$sdk_path" --triple "arm64-apple-ios${platform_version}-simulator")
-              echo "Using iOS simulator SDK: $platform_version"
-              ;;
-            maccatalyst)
-              sdk_path="$(xcrun --sdk macosx --show-sdk-path)"
-              swift_package_args=(--sdk "$sdk_path" --triple "arm64-apple-ios${platform_version}-macabi")
-              echo "Using Mac Catalyst SDK: $platform_version"
-              ;;
-            visionos)
-              sdk_path="$(xcrun --sdk xrsimulator --show-sdk-path)"
-              swift_package_args=(--sdk "$sdk_path" --triple "arm64-apple-xros${platform_version}-simulator")
-              echo "Using visionOS simulator SDK: $platform_version"
-              ;;
-            tvos)
-              sdk_path="$(xcrun --sdk appletvsimulator --show-sdk-path)"
-              swift_package_args=(--sdk "$sdk_path" --triple "arm64-apple-tvos${platform_version}-simulator")
-              echo "Using tvOS simulator SDK: $platform_version"
-              ;;
-            watchos)
-              sdk_path="$(xcrun --sdk watchsimulator --show-sdk-path)"
-              swift_package_args=(--sdk "$sdk_path" --triple "arm64-apple-watchos${platform_version}-simulator")
-              echo "Using watchOS simulator SDK: $platform_version"
-              ;;
+            macos)       sdk_name="";                 triple="" ;;
+            ios)         sdk_name="iphonesimulator";  triple="arm64-apple-ios${platform_version}-simulator" ;;
+            maccatalyst) sdk_name="macosx";           triple="arm64-apple-ios${platform_version}-macabi" ;;
+            visionos)    sdk_name="xrsimulator";      triple="arm64-apple-xros${platform_version}-simulator" ;;
+            tvos)        sdk_name="appletvsimulator"; triple="arm64-apple-tvos${platform_version}-simulator" ;;
+            watchos)     sdk_name="watchsimulator";   triple="arm64-apple-watchos${platform_version}-simulator" ;;
             *)
               echo "Unsupported platform selection: $platform_name"
               exit 1
               ;;
           esac
+
+          if [[ -n "$triple" ]]; then
+            # swift package does not forward --triple to swift-api-digester, which then targets the
+            # host, fails to load the standard library, and writes an empty baseline.
+            toolset="$RUNNER_TEMP/api-digester-toolset.json"
+            jq -n --arg triple "$triple" \
+              '{schemaVersion: "1.0", swiftCompiler: {extraCLIOptions: ["-target", $triple]}}' > "$toolset"
+            swift_package_args=(
+              --sdk "$(xcrun --sdk "$sdk_name" --show-sdk-path)"
+              --triple "$triple"
+              --toolset "$toolset"
+            )
+            echo "Using $platform_name SDK: $platform_version"
+          else
+            echo "Using host macOS SDK"
+          fi
 
           run_diagnose() {
             local product="$1"

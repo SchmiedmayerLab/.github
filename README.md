@@ -20,6 +20,9 @@ This repository provides default community health files, reusable GitHub Actions
 
 This repository publishes reusable GitHub Actions workflows for common Schmiedmayer Lab project tasks.
 Use them from another repository with `jobs.<job_id>.uses` and a version tag.
+Each entry under [Workflow Reference](#workflow-reference) states the secrets that workflow takes.
+[SECRETS.md](SECRETS.md) covers where a value belongs and the repository settings these workflows
+assume.
 
 ### Workflow Catalog
 
@@ -49,11 +52,21 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | [`swift-package-test.yml`](#test-swift-package) | Test a Swift package across the configured Apple and Linux matrices. |
 | [`swift-test.yml`](#run-swift-tests) | Run SwiftPM tests and optionally export LCOV coverage. |
 | [`xcodebuild.yml`](#build-and-test-with-xcodebuild) | Build and test Apple projects with xcodebuild. |
+| [`xcodebuild-or-fastlane.yml`](#test-using-xcodebuild-or-run-fastlane) | Build, test, sign or deploy an Apple project through xcodebuild or a Fastlane lane. |
 | [`firebase-emulators-exec.yml`](#run-command-with-firebase-emulator) | Run a trusted command through the Firebase Emulator. |
 | [`xcode-deploy.yml`](#deploy-xcode-project) | Deploy Xcode projects with signing and file injection setup. |
 | [`xcarchive.yml`](#build-xcarchive) | Build an XCArchive and upload it as an artifact. |
 | [`xcframework.yml`](#build-xcframework) | Build an XCFramework from XCArchive artifacts. |
 | [`xcframework-release.yml`](#release-xcframework) | Commit and release an XCFramework artifact. |
+
+#### Android
+
+| Workflow | Use |
+|---|---|
+| [`android.yml`](#android-build-test-and-analysis) | Run the standard Android pipeline: Detekt, unit tests, CodeQL, screenshot tests, and instrumented tests. |
+| [`android-google-play.yml`](#android-google-play-deployment) | Sign an Android bundle and publish it to a Google Play track. |
+| [`android-google-play-bootstrap.yml`](#android-google-play-bootstrap) | Build the first signed bundle needed to create the Play Console listing. |
+| [`android-google-play-access.yml`](#android-google-play-access-check) | Verify that the Play service account can reach the application. |
 
 #### Web, Node.js, and Firebase
 
@@ -96,6 +109,8 @@ jobs:
       runs_on_labels: '["ubuntu-latest"]'
 ```
 
+**Secrets:** none.
+
 ##### Run ESLint
 
 [`eslint.yml`](.github/workflows/eslint.yml) installs Node.js dependencies, runs the repository lint command, annotates pull requests, and uploads the ESLint report.
@@ -108,11 +123,18 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.5
 ```
 
+**Secrets:** none.
+
 ##### Check Markdown Links
 
 [`markdown-links.yml`](.github/workflows/markdown-links.yml) checks Markdown links with Linkspector.
 Use it for documentation-heavy repositories. The workflow needs read access to pull requests so
 Linkspector can map diagnostics to the pull request diff.
+
+Linkspector browses anonymously, so in a **private** repository every link back into that repository
+— badge targets, `blob/main/LICENSE.md` — answers 404 no matter what the file tree contains. The
+workflow therefore adds an ignore pattern for the repository's own URL when the repository is
+private, and leaves every other link checked.
 
 ```yml
 jobs:
@@ -123,6 +145,8 @@ jobs:
       contents: read
       pull-requests: read
 ```
+
+**Secrets:** none.
 
 ##### Run Periphery
 
@@ -135,6 +159,8 @@ jobs:
     name: Run Periphery
     uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.5
 ```
+
+**Secrets:** none.
 
 ##### Check Repository Standards
 
@@ -165,6 +191,8 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
 ```
 
+**Secrets:** none.
+
 ##### Check REUSE Compliance
 
 [`reuse.yml`](.github/workflows/reuse.yml) checks that files carry REUSE-compliant license and copyright metadata.
@@ -176,6 +204,8 @@ jobs:
     name: Check REUSE Compliance
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
 ```
+
+**Secrets:** none.
 
 ##### Run SwiftLint
 
@@ -190,6 +220,8 @@ jobs:
 ```
 
 #### Swift and Apple Platforms
+
+**Secrets:** none.
 
 ##### Merge and Upload Coverage
 
@@ -206,6 +238,8 @@ jobs:
     secrets:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```
+
+**Secrets:** `token`
 
 ##### Deploy DocC Documentation
 
@@ -226,6 +260,8 @@ jobs:
       scheme: ExamplePackage
 ```
 
+**Secrets:** none.
+
 ##### Diagnose Swift API Breaking Changes
 
 [`swift-api-breaking-changes.yml`](.github/workflows/swift-api-breaking-changes.yml) detects library products and platform metadata before running Swift API breakage diagnostics.
@@ -237,6 +273,8 @@ jobs:
     name: Diagnose Swift API Breaking Changes
     uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.5
 ```
+
+**Secrets:** none.
 
 ##### Diagnose Swift Package API Breaking Changes
 
@@ -254,6 +292,8 @@ jobs:
       platform_version: '18.0'
 ```
 
+**Secrets:** none.
+
 ##### Swift Package CI
 
 Use [`swift-package-ci.yml`](.github/workflows/swift-package-ci.yml) as the default entry point for Swift packages.
@@ -266,6 +306,8 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.5
     secrets: inherit
 ```
+
+**Secrets:** `CODECOV_TOKEN`
 
 ##### Set Up Swift Package
 
@@ -288,6 +330,8 @@ jobs:
       ui_platform_matrix: ${{ needs.setup.outputs.ui_platform_matrix }}
 ```
 
+**Secrets:** none.
+
 ##### Analyze Swift Package
 
 [`swift-package-static-analysis.yml`](.github/workflows/swift-package-static-analysis.yml) combines REUSE, SwiftLint, Markdown link checking, and Swift API breakage diagnostics.
@@ -303,6 +347,8 @@ jobs:
       platform_name: ios
       platform_version: '18.0'
 ```
+
+**Secrets:** none.
 
 ##### Test Swift Package
 
@@ -324,6 +370,8 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
 
+**Secrets:** `CODECOV_TOKEN`
+
 ##### Run Swift Tests
 
 [`swift-test.yml`](.github/workflows/swift-test.yml) runs SwiftPM tests and can upload an LCOV artifact for later coverage merging.
@@ -335,6 +383,8 @@ jobs:
     name: Run Swift Tests
     uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.5
 ```
+
+**Secrets:** `CHECKOUT_TOKEN`
 
 ##### Build and Test with xcodebuild
 
@@ -380,6 +430,56 @@ jobs:
       scheme: TemplatePackage
 ```
 
+**Secrets:** `CHECKOUT_TOKEN`
+
+##### Test Using xcodebuild or Run Fastlane
+
+[`xcodebuild-or-fastlane.yml`](.github/workflows/xcodebuild-or-fastlane.yml) is the general-purpose
+Apple build workflow. It runs `xcodebuild` by default, or a named Fastlane lane instead, and can
+optionally set up code signing, a Firebase emulator, CodeQL, and injected configuration files.
+
+```yml
+jobs:
+  buildandtest:
+    name: Build and Test
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-or-fastlane.yml@v0.5
+    permissions:
+      contents: read
+    with:
+      scheme: MyApp
+```
+
+| Input | Default | Effect |
+|---|---|---|
+| `job_name` | `Test using xcodebuild or run fastlane` | Display name of the job. |
+| `path` | `.` | Project directory. |
+| `runsonlabels` | `'["macos-26"]'` | Runner labels. |
+| `xcodeversion` | `latest-stable` | Xcode version to select. |
+| `scheme` | detected | Xcode scheme. Required when the project has more than one shared scheme. |
+| `buildConfig` | `Debug` | Build configuration. |
+| `destination` | an iOS Simulator destination | `xcodebuild` destination. |
+| `setupSimulators` | `False` | Prepare additional simulators before building. |
+| `resultBundle` | none | Path for the `.xcresult` bundle. |
+| `swiftVersion` | toolchain default | Swift version to select. |
+| `test` | `True` | Run tests as well as building. |
+| `testplan` | none | Test plan to run. |
+| `spm-disable-prebuilts` | `False` | Disable SwiftPM prebuilt binaries. |
+| `fastlanelane` | none | Run this Fastlane lane instead of `xcodebuild`. |
+| `customcommand` | none | Run this command instead. |
+| `artifactname` | none | Upload build output under this artifact name. |
+| `environment` | none | GitHub deployment environment. |
+| `setupsigning` | `False` | Install the certificate and provisioning profiles. |
+| `cacheDerivedData` | `False` | Cache DerivedData between runs. |
+| `setupfirebaseemulator` | `False` | Start the Firebase emulator for the run. |
+| `firebaseemulatorimport` | none | Emulator data to import. |
+| `firebasejsonpath` | `./firebase.json` | Firebase configuration path. |
+| `googleserviceinfoplistpath` | none | Destination for the injected `GoogleService-Info.plist`. |
+| `codeql` | `False` | Analyze the build with CodeQL. |
+| `checkout_submodules` | none | Submodule checkout mode. |
+| `checkout_lfs` | `False` | Fetch Git LFS objects. |
+
+**Secrets:** `APPLE_ID`, `APP_STORE_CONNECT_API_KEY_BASE64`, `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `BUILD_CERTIFICATE_BASE64`, `BUILD_PROVISION_PROFILE_BASE64`, `BUILD_SECONDARY_PROVISION_PROFILE_BASE64`, `CHECKOUT_TOKEN`, `GOOGLE_APPLICATION_CREDENTIALS_BASE64`, `GOOGLE_SERVICE_INFO_PLIST_BASE64`, `KEYCHAIN_PASSWORD`, `P12_PASSWORD`
+
 ##### Run Command with Firebase Emulator
 
 Use [`firebase-emulators-exec.yml`](.github/workflows/firebase-emulators-exec.yml) for test or validation commands that must run while Firebase emulators are active.
@@ -398,6 +498,8 @@ jobs:
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
 ```
+
+**Secrets:** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`
 
 ##### Deploy Xcode Project
 
@@ -431,6 +533,8 @@ jobs:
       P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
 ```
 
+**Secrets:** `APPLE_ID`, `APP_STORE_CONNECT_API_KEY_BASE64`, `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `BUILD_CERTIFICATE_BASE64`, `BUILD_PROVISION_PROFILE_BASE64`, `BUILD_SECONDARY_PROVISION_PROFILE_BASE64`, `CHECKOUT_TOKEN`, `INJECTED_SECRET_FILE_BASE64`, `P12_PASSWORD`
+
 ##### Build XCArchive
 
 [`xcarchive.yml`](.github/workflows/xcarchive.yml) builds an XCArchive and uploads it as an artifact.
@@ -448,6 +552,8 @@ jobs:
       version: 0.1.0
 ```
 
+**Secrets:** none.
+
 ##### Build XCFramework
 
 Use [`xcframework.yml`](.github/workflows/xcframework.yml) to package XCArchive outputs into an XCFramework artifact.
@@ -463,6 +569,8 @@ jobs:
       scheme: ExampleKit
       version: 0.1.0
 ```
+
+**Secrets:** `access-token`
 
 ##### Release XCFramework
 
@@ -484,7 +592,160 @@ jobs:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
 
+#### Android
+
+**Secrets:** `access-token`
+
+##### Android Build, Test, and Analysis
+
+[`android.yml`](.github/workflows/android.yml) runs the standard Android pipeline. It reads the
+project rather than asking for configuration: the JDK version comes from `jvmToolchain(…)` or
+`JavaVersion.VERSION_…` in the Gradle build, the Ruby version from `.ruby-version`, the Detekt
+configuration from the first of `internal/detekt-config.yml`, `config/detekt/detekt.yml`,
+`detekt.yml` or `.detekt.yml`, and the screenshot and instrumented test jobs run only when the
+matching `screenshotTests` and `connectedCheck` lanes exist in `fastlane/Fastfile`. Git LFS is
+enabled for the screenshot job when `.gitattributes` declares an LFS filter.
+
+A repository with a conventional layout needs no inputs at all.
+
+```yml
+name: Build, Test and Analyze
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  android:
+    name: Android
+    uses: SchmiedmayerLab/.github/.github/workflows/android.yml@v0.5
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    secrets: inherit
+```
+
+| Input | Default | Effect |
+|---|---|---|
+| `runsonlabels` | `'["ubuntu-latest"]'` | Runner labels. |
+| `javaversion` | detected | Overrides the JDK major version. |
+| `rubyversion` | detected, else `3.3` | Overrides the Ruby version. |
+| `apilevels` | `'[31, 34]'` | Android API levels for the instrumented matrix. |
+| `emulatortargets` | `'["default", "google_apis"]'` | Emulator targets for the instrumented matrix. |
+| `emulatorprofile` | `pixel_6` | Emulator device profile. |
+| `instrumentedtests` | `true` | Runs the instrumented matrix when a `connectedCheck` lane exists. |
+| `codeql` | `true` | Analyzes the build with CodeQL. |
+| `testtimeoutminutes` | `120` | Timeout for the unit test job. |
+
+The repository owns its Fastlane lanes. `test` is required; `screenshotTests` and `connectedCheck`
+are optional and enable their jobs when present.
+
+Documentation deployment is deliberately not part of this workflow. A job that pushes to `gh-pages`
+needs `contents: write`, which a pull request caller should not grant — keep it in a separate
+workflow triggered on `push` to `main`.
+
+**Secrets:** `CODECOV_TOKEN`
+
+##### Android Google Play Deployment
+
+[`android-google-play.yml`](.github/workflows/android-google-play.yml) resolves the version, writes the
+signing material, and runs the `deployment` Fastlane lane. The JDK and Ruby versions are detected the
+same way as `android.yml`.
+
+The environment is declared inside this workflow rather than in the caller, because a job that calls a
+reusable workflow cannot set `environment:`. That placement is also what makes environment-scoped
+secrets and variables resolve: `APP_IDENTIFIER`, the signing secrets and the service account key are
+read from the environment this workflow runs in.
+
+```yml
+  google_play:
+    name: Google Play Upload
+    needs: android
+    uses: SchmiedmayerLab/.github/.github/workflows/android-google-play.yml@v0.5
+    permissions:
+      contents: read
+    secrets: inherit
+    with:
+      environment: staging
+```
+
+| Input | Default | Effect |
+|---|---|---|
+| `environment` | required | GitHub deployment environment the upload runs in. |
+| `track` | the environment name | Google Play track, for the rare case where it differs from the environment. |
+| `version` | derived | Explicit semantic version. |
+| `versionproperty` | `app.versionName` | `gradle.properties` key holding the declared version. The published version is the higher of that value and the latest tag with its patch incremented. |
+| `recordversion` | `false` | Commit the published version back to that key, so the declared version never trails the store. Needs `contents: write`. |
+| `releasenotes` | none | Release notes to publish. |
+| `keystorepaths` | `deployment/secrets/upload-keystore.jks` | Newline-separated destinations for the decoded keystore. |
+| `googleservicespath` | none | Destination for `google-services.json`. Skipped when empty. |
+| `secretsxmlpath` | none | Destination for an Android secrets resource. Skipped when empty. |
+
+**Name the environments after the Play tracks.** With an `internal` and a `production` environment,
+the track is the environment and no project passes `track` at all. The input exists for the case
+where a project publishes to a track that has no environment of its own — but prefer creating the
+environment, because a track offered as an environment that does not exist silently produces an empty
+environment with no credentials.
+
+`app.versionName` in `gradle.properties` is the declared version in every Android project, so
+`versionproperty` never has to be passed either. The Gradle build reads the same key, and with
+`recordversion` the deployment writes the published version back to it, which keeps the repository,
+the tag and the store in agreement.
+
+Everything else — the bundle path, mapping path, metadata directory and signing configuration — stays
+in the project's `Fastfile`. This workflow moves bytes into place and invokes a lane; it does not
+duplicate what `APP_CONFIG` already declares.
+
+**Secrets:** `GOOGLE_SERVICES_JSON`, `KEY_ALIAS`, `KEY_PASSWORD`, `KEY_STORE`, `SECRETS_XML`, `SERVICE_ACCOUNT_JSON_KEY`
+
+##### Android Google Play Bootstrap
+
+[`android-google-play-bootstrap.yml`](.github/workflows/android-google-play-bootstrap.yml) builds the
+first signed bundle, the one Google Play requires before a listing exists. It runs the
+`bootstrap_bundle` lane and uploads the result as an artifact.
+
+```yml
+  signed_bundle:
+    name: Signed Bootstrap Bundle
+    needs: android
+    uses: SchmiedmayerLab/.github/.github/workflows/android-google-play-bootstrap.yml@v0.5
+    permissions:
+      contents: read
+    secrets: inherit
+    with:
+      version: 1.0.0
+```
+
+| Input | Default | Effect |
+|---|---|---|
+| `version` | `1.0.0` | Version for the first bundle. |
+| `environment` | `staging` | Environment holding the signing credentials. |
+| `artifactname` | repository name and version | Name of the uploaded artifact. |
+| `artifactpaths` | release bundle and mapping file | Newline-separated paths to upload. |
+| `keystorepaths` | `deployment/secrets/upload-keystore.jks` | Destinations for the decoded keystore. |
+
+**Secrets:** `KEY_ALIAS`, `KEY_PASSWORD`, `KEY_STORE`
+
+##### Android Google Play Access Check
+
+[`android-google-play-access.yml`](.github/workflows/android-google-play-access.yml) runs the
+`validate_play_access` lane to confirm the service account can reach the application. Useful on its
+own, before a release, when Play credentials are rotated.
+
+```yml
+  google_play_access:
+    name: Google Play Access
+    uses: SchmiedmayerLab/.github/.github/workflows/android-google-play-access.yml@v0.5
+    permissions:
+      contents: read
+    secrets: inherit
+```
+
 #### Web, Node.js, and Firebase
+
+**Secrets:** `SERVICE_ACCOUNT_JSON_KEY`
 
 ##### Deploy Firebase
 
@@ -501,6 +762,8 @@ jobs:
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
 ```
+
+**Secrets:** `ENV_FILE`, `GOOGLE_APPLICATION_CREDENTIALS_BASE64`
 
 ##### Publish npm Packages
 
@@ -533,6 +796,8 @@ Callers pinned to an earlier release continue to use the earlier interface uncha
 When adopting v0.5, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
 Replace `bootstrapWithToken: true` with explicit package names in `bootstrapPackages`, or use `*` only when every unpublished package is intentionally being bootstrapped.
 
+**Secrets:** `NPM_TOKEN`
+
 ##### Build and Deploy npm Project Pages
 
 Use [`npm-pages.yml`](.github/workflows/npm-pages.yml) when an npm project can build its complete Pages artifact with `npm run pages:build`.
@@ -556,6 +821,8 @@ Call `npm run pages:build` directly in pull-request CI so that build jobs do not
 This convention also supports static Next.js exports, replacing the former framework-specific workflow.
 Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.5`.
 
+**Secrets:** none.
+
 ##### Test npm Package and Upload Coverage
 
 Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov.
@@ -576,6 +843,8 @@ jobs:
 
 #### Containers
 
+**Secrets:** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`, `token`
+
 ##### Build and Push Docker Image
 
 Use [`docker-build-and-push.yml`](.github/workflows/docker-build-and-push.yml) to publish a multi-architecture Docker image.
@@ -593,6 +862,8 @@ jobs:
       imageName: schmiedmayerlab/example
 ```
 
+**Secrets:** `password`, `username`
+
 ##### Test Docker Compose Stack
 
 [`docker-compose-test.yml`](.github/workflows/docker-compose-test.yml) builds and starts a Docker Compose stack and can run an optional smoke-test script.
@@ -608,6 +879,8 @@ jobs:
 ```
 
 #### Releases
+
+**Secrets:** `ENV_FILE`
 
 ##### Tag Action Release
 
@@ -627,6 +900,8 @@ jobs:
     with:
       user: PaulsAutomationBot
 ```
+
+**Secrets:** `access-token`
 
 ##### Format Release Notes
 
@@ -661,3 +936,6 @@ For more information, visit the [Schmiedmayer Lab GitHub organization](https://g
 
 ![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-light.png#gh-light-mode-only)
 ![Schmiedmayer Lab](https://raw.githubusercontent.com/SchmiedmayerLab/.github/main/assets/footer-dark.png#gh-dark-mode-only)
+
+**Secrets:** none.
+

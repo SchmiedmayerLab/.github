@@ -1,0 +1,357 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Android
+
+on:
+  workflow_call:
+    inputs:
+      runsonlabels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      javaversion:
+        description: |
+          JDK major version. Detected from the Gradle build when empty.
+        required: false
+        type: string
+        default: ''
+      rubyversion:
+        description: |
+          Ruby version for Fastlane. Read from .ruby-version when empty, otherwise 3.3.
+        required: false
+        type: string
+        default: ''
+      apilevels:
+        description: |
+          JSON array of Android API levels for the instrumented test matrix.
+        required: false
+        type: string
+        default: '[31, 34]'
+      emulatortargets:
+        description: |
+          JSON array of emulator targets for the instrumented test matrix.
+        required: false
+        type: string
+        default: '["default", "google_apis"]'
+      emulatorprofile:
+        description: |
+          Emulator device profile for the instrumented test matrix.
+        required: false
+        type: string
+        default: 'pixel_6'
+      instrumentedtests:
+        description: |
+          Run the instrumented test matrix. Requires a connectedCheck Fastlane lane.
+        required: false
+        type: boolean
+        default: true
+      codeql:
+        description: |
+          Analyze the build with CodeQL.
+        required: false
+        type: boolean
+        default: true
+      testtimeoutminutes:
+        description: |
+          Timeout for the unit test job.
+        required: false
+        type: number
+        default: 120
+    secrets:
+      CODECOV_TOKEN:
+        description: |
+          Codecov upload token. Not required for public repositories.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  detect:
+    name: Project Setup
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    permissions:
+      contents: read
+    outputs:
+      java: ${{ steps.detect.outputs.java }}
+      ruby: ${{ steps.detect.outputs.ruby }}
+      detektconfig: ${{ steps.detect.outputs.detektconfig }}
+      detekt: ${{ steps.detect.outputs.detekt }}
+      screenshots: ${{ steps.detect.outputs.screenshots }}
+      connected: ${{ steps.detect.outputs.connected }}
+      lfs: ${{ steps.detect.outputs.lfs }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Read the project configuration
+        id: detect
+        env:
+          JAVA_OVERRIDE: ${{ inputs.javaversion }}
+          RUBY_OVERRIDE: ${{ inputs.rubyversion }}
+        run: |
+          java="$JAVA_OVERRIDE"
+          if [ -z "$java" ]; then
+            java=$(grep -rhoE 'jvmToolchain\(([0-9]+)\)' --include='*.gradle.kts' --include='*.gradle' . 2>/dev/null \
+                   | grep -oE '[0-9]+' | sort -rn | head -1)
+          fi
+          if [ -z "$java" ]; then
+            java=$(grep -rhoE 'JavaVersion\.VERSION_[0-9_]+' --include='*.gradle.kts' --include='*.gradle' . 2>/dev/null \
+                   | sed 's/.*VERSION_//; s/1_//' | sort -rn | head -1)
+          fi
+          [ -z "$java" ] && java=21
+
+          ruby="$RUBY_OVERRIDE"
+          [ -z "$ruby" ] && [ -f .ruby-version ] && ruby=$(tr -d '[:space:]' < .ruby-version)
+          [ -z "$ruby" ] && ruby=3.3
+
+          detektconfig=""
+          for candidate in internal/detekt-config.yml config/detekt/detekt.yml detekt.yml .detekt.yml; do
+            if [ -f "$candidate" ]; then detektconfig="$candidate"; break; fi
+          done
+          detekt=false
+          if [ -n "$detektconfig" ] || grep -qs detekt gradle/libs.versions.toml; then detekt=true; fi
+
+          screenshots=false
+          connected=false
+          if [ -f fastlane/Fastfile ]; then
+            grep -qE '^\s*lane :screenshotTests' fastlane/Fastfile && screenshots=true
+            grep -qE '^\s*lane :connectedCheck' fastlane/Fastfile && connected=true
+          fi
+
+          lfs=false
+          [ -f .gitattributes ] && grep -qs 'filter=lfs' .gitattributes && lfs=true
+
+          {
+            echo "java=$java"
+            echo "ruby=$ruby"
+            echo "detektconfig=$detektconfig"
+            echo "detekt=$detekt"
+            echo "screenshots=$screenshots"
+            echo "connected=$connected"
+            echo "lfs=$lfs"
+          } >> "$GITHUB_OUTPUT"
+          echo "JDK $java · Ruby $ruby · detekt=$detekt ($detektconfig) · screenshots=$screenshots · connectedCheck=$connected · lfs=$lfs"
+
+  detekt:
+    name: Detekt
+    needs: detect
+    if: needs.detect.outputs.detekt == 'true'
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: ${{ needs.detect.outputs.java }}
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v6.2.0
+      - name: Run Detekt
+        run: ./gradlew detekt --no-daemon
+      - name: Upload Detekt Reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: detekt-reports
+          path: '**/build/reports/detekt/**'
+          if-no-files-found: warn
+          retention-days: 14
+
+  unit_tests:
+    name: Unit Tests
+    needs: detect
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    timeout-minutes: ${{ inputs.testtimeoutminutes }}
+    permissions:
+      security-events: write
+      packages: read
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: ${{ needs.detect.outputs.java }}
+          cache: gradle
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ needs.detect.outputs.ruby }}
+          bundler-cache: true
+      - name: Initialize CodeQL
+        if: inputs.codeql
+        uses: github/codeql-action/init@v4.37.4
+        with:
+          languages: java-kotlin
+          build-mode: manual
+      - name: Run Unit Tests
+        run: bundle exec fastlane test
+      - name: Upload Test Reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-reports
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            **/build/reports/tests/**
+            **/build/test-results/**
+      - name: Stop Gradle Daemon
+        run: ./gradlew --stop
+      - name: Analyze with CodeQL
+        if: inputs.codeql
+        uses: github/codeql-action/analyze@v4.37.4
+        with:
+          category: "/language:java-kotlin"
+      - name: Upload Unit Test Coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: '**/build/reports/jacoco/jacocoCoverageReport/jacocoCoverageReport.xml'
+          flags: unittests
+          name: codecov-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  screenshot_tests:
+    name: Screenshot Tests
+    needs: detect
+    if: needs.detect.outputs.screenshots == 'true'
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          lfs: ${{ needs.detect.outputs.lfs == 'true' }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: ${{ needs.detect.outputs.java }}
+          cache: gradle
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ needs.detect.outputs.ruby }}
+          bundler-cache: true
+      - name: Verify Screenshots
+        run: bundle exec fastlane screenshotTests
+      - name: Upload Screenshot Failures
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-failures
+          if-no-files-found: ignore
+          retention-days: 14
+          path: |
+            **/build/paparazzi/failures/**
+            **/build/reports/tests/**
+            **/build/test-results/**
+      - name: Stop Gradle Daemon
+        run: ./gradlew --stop
+
+  instrumented_tests:
+    name: Instrumented Tests (API ${{ matrix.api-level }}, ${{ matrix.target }})
+    needs: detect
+    if: inputs.instrumentedtests && needs.detect.outputs.connected == 'true'
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    timeout-minutes: 90
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: ${{ fromJson(inputs.apilevels) }}
+        target: ${{ fromJson(inputs.emulatortargets) }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: ${{ needs.detect.outputs.java }}
+          cache: gradle
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ needs.detect.outputs.ruby }}
+          bundler-cache: true
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: gradle/actions/setup-gradle@v6.2.0
+      - name: Restore AVD Cache
+        uses: actions/cache@v6
+        id: avd-cache
+        with:
+          path: |
+            ~/.android/avd/*
+            ~/.android/adb*
+          key: avd-v5-${{ matrix.api-level }}-${{ matrix.target }}-${{ inputs.emulatorprofile }}
+      - name: Create and Cache AVD
+        if: steps.avd-cache.outputs.cache-hit != 'true'
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          profile: ${{ inputs.emulatorprofile }}
+          arch: x86_64
+          ram-size: 1536M
+          heap-size: 256M
+          disk-size: 1024M
+          force-avd-creation: false
+          pre-emulator-launch-script: >-
+            sed -i
+            's/^disk.dataPartition.size=.*/disk.dataPartition.size=1024M/'
+            /home/runner/.android/avd/test.avd/config.ini
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: false
+          script: |
+            sdkmanager --list
+            avdmanager list devices
+      - name: Build Instrumented Test Artifacts
+        run: >-
+          ./gradlew
+          assembleDebug
+          assembleDebugAndroidTest
+          --no-daemon
+          --max-workers=2
+      - name: Run Instrumented Tests
+        uses: reactivecircus/android-emulator-runner@v2
+        env:
+          GRADLE_OPTS: >-
+            -Dorg.gradle.jvmargs=-Xmx2048m
+            -Dorg.gradle.workers.max=2
+            -Dkotlin.daemon.jvmargs=-Xmx1024m
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: ${{ matrix.target }}
+          profile: ${{ inputs.emulatorprofile }}
+          arch: x86_64
+          ram-size: 1536M
+          heap-size: 256M
+          disk-size: 1024M
+          force-avd-creation: false
+          pre-emulator-launch-script: >-
+            sed -i
+            's/^disk.dataPartition.size=.*/disk.dataPartition.size=1024M/'
+            /home/runner/.android/avd/test.avd/config.ini
+          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          disable-animations: true
+          script: bundle exec fastlane connectedCheck
+      - name: Upload Instrumented Test Coverage
+        uses: codecov/codecov-action@v7
+        with:
+          files: '**/build/reports/coverage/androidTest/debug/connected/index.html'
+          flags: uitests
+          name: codecov-coverage
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}

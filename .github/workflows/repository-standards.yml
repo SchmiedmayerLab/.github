@@ -66,6 +66,93 @@ jobs:
             echo "::warning::shared workflow references not on ${EXPECTED_SHARED_WORKFLOW_REF}: $(echo "$drift" | tr '\n' ' ')"
           fi
 
+      - name: Callers grant the permissions their reusable workflows need
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
+          DEFAULT_WORKFLOW_PERMISSIONS=$(gh api "repos/$REPO/actions/permissions/workflow" \
+            --jq '.default_workflow_permissions' 2>/dev/null || echo read)
+          export DEFAULT_WORKFLOW_PERMISSIONS
+          git clone --quiet --depth 1 --branch "$EXPECTED_SHARED_WORKFLOW_REF" \
+            https://github.com/SchmiedmayerLab/.github.git "$RUNNER_TEMP/shared-workflows"
+          python3 - <<'PY'
+          import os, pathlib, re, sys, yaml
+
+          RANK = {"none": 0, "read": 1, "write": 2}
+          SHARED = pathlib.Path(os.environ["RUNNER_TEMP"], "shared-workflows/.github/workflows")
+          LOCAL = pathlib.Path(".github/workflows")
+          # what a job inherits when it declares nothing; the restricted default grants only these two
+          INHERITED = ({"__all__": "write"} if os.environ.get("DEFAULT_WORKFLOW_PERMISSIONS") == "write"
+                       else {"contents": "read", "packages": "read"})
+          CALL = re.compile(r"SchmiedmayerLab/\.github/\.github/workflows/([\w.-]+\.yml)@")
+
+          def declared(node):
+              p = node.get("permissions") if isinstance(node, dict) else None
+              if p is None:
+                  return None
+              if isinstance(p, str):
+                  return {"__all__": "read" if p == "read-all" else "write"}
+              return {k: str(v) for k, v in p.items()}
+
+          def needs(doc):
+              n = dict(declared(doc) or {})
+              for _, job in (doc.get("jobs") or {}).items():
+                  for k, v in (declared(job) or {}).items():
+                      if RANK.get(str(v), 0) > RANK.get(str(n.get(k, "none")), 0):
+                          n[k] = v
+              return {k: v for k, v in n.items() if RANK.get(str(v), 0) > 0}
+
+          def load(path):
+              try:
+                  doc = yaml.safe_load(path.read_text(errors="ignore"))
+              except Exception as exc:
+                  print(f"::error file={path}::not valid YAML: {exc}")
+                  sys.exit(1)
+              return doc if isinstance(doc, dict) else {}
+
+          required = {}
+          for f in sorted(SHARED.glob("*.yml")):
+              doc = load(f)
+              on = doc.get("on", doc.get(True))
+              if isinstance(on, dict) and "workflow_call" in on:
+                  required[f.name] = needs(doc)
+
+          failed = False
+          for f in sorted(LOCAL.glob("*.y*ml")):
+              doc = load(f)
+              top = declared(doc)
+              for name, job in (doc.get("jobs") or {}).items():
+                  if not isinstance(job, dict):
+                      continue
+                  uses = str(job.get("uses", ""))
+                  m = CALL.match(uses)
+                  if m:
+                      need = required.get(m.group(1))
+                      if need is None:
+                          print(f"::error file={f}::job '{name}' calls unknown shared workflow {m.group(1)}")
+                          failed = True
+                          continue
+                  elif uses.startswith("./.github/workflows/"):
+                      callee = LOCAL / uses.split("/")[-1]
+                      if not callee.exists():
+                          continue
+                      need = needs(load(callee))
+                  else:
+                      continue
+                  grant = declared(job) or top or INHERITED
+                  if "__all__" in grant:
+                      short = [f"{k}: {v}" for k, v in sorted(need.items())
+                               if RANK[str(v)] > RANK[grant["__all__"]]]
+                  else:
+                      short = [f"{k}: {v}" for k, v in sorted(need.items())
+                               if RANK[str(v)] > RANK.get(str(grant.get(k, "none")), 0)]
+                  if short:
+                      print(f"::error file={f}::job '{name}' does not grant {', '.join(short)}, "
+                            f"which the workflow it calls requires")
+                      failed = True
+
+          sys.exit(1 if failed else 0)
+          PY
+
       - name: Prepare a scannable README
         run: |
           # shellcheck disable=SC2016

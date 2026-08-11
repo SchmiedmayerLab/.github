@@ -22,3 +22,88 @@ jobs:
   standards:
     name: Standards
     uses: $/.github/workflows/repository-standards.yml
+
+  documentation:
+    name: Workflow Documentation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: The README matches the reusable workflows
+        run: |
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          import pathlib, re, sys, yaml
+
+          SHARED = pathlib.Path(".github/workflows")
+          readme = pathlib.Path("README.md").read_text()
+          reference = readme[readme.index("### Workflow Reference"):]
+          catalog = set(re.findall(r"^\| \[`([\w.-]+\.yml)`\]", readme, re.M))
+
+          sections = {}
+          chunks = re.split(r"(?m)^(##### .*)$", reference)
+          for i in range(1, len(chunks), 2):
+              m = re.search(r"\]\(\.github/workflows/([\w.-]+\.yml)\)", chunks[i + 1])
+              if m:
+                  sections[m.group(1)] = chunks[i + 1]
+
+          failed = False
+          samples, accepts = {}, {}
+          for f in sorted(SHARED.glob("*.yml")):
+              doc = yaml.safe_load(f.read_text()) or {}
+              on = doc.get("on", doc.get(True))
+              if not (isinstance(on, dict) and "workflow_call" in on):
+                  continue
+              call = on["workflow_call"] or {}
+              declared = set((call.get("secrets") or {}).keys())
+
+              if f.name not in catalog:
+                  print(f"::error file=README.md::{f.name} is missing from the workflow catalog")
+                  failed = True
+              section = sections.get(f.name)
+              if section is None:
+                  print(f"::error file=README.md::{f.name} has no entry under Workflow Reference")
+                  failed = True
+                  continue
+
+              stated = set(re.findall(r"`([A-Za-z_][A-Za-z0-9_-]*)`",
+                                      re.search(r"^\*\*Secrets:\*\*(.*)$", section, re.M).group(1)
+                                      if re.search(r"^\*\*Secrets:\*\*", section, re.M) else ""))
+              if not re.search(r"^\*\*Secrets:\*\*", section, re.M):
+                  print(f"::error file=README.md::{f.name} does not state its secrets")
+                  failed = True
+                  continue
+              for missing in sorted(declared - stated):
+                  print(f"::error file=README.md::{f.name} declares secret '{missing}' but the README omits it")
+                  failed = True
+              for extra in sorted(stated - declared):
+                  print(f"::error file=README.md::{f.name} does not declare secret '{extra}' that the README lists")
+                  failed = True
+
+              samples[f.name] = section
+              accepts[f.name] = set((call.get("inputs") or {}).keys())
+
+          # a usage sample must not pass an input the workflow it calls does not accept
+          for owner, section in samples.items():
+              for sample in re.findall(r"```yml\n(.*?)```", section, re.S):
+                  try:
+                      parsed = yaml.safe_load(sample) or {}
+                  except Exception:
+                      continue
+                  for job in (parsed.get("jobs") or parsed).values() if isinstance(parsed, dict) else []:
+                      if not isinstance(job, dict):
+                          continue
+                      m = re.match(r"SchmiedmayerLab/\.github/\.github/workflows/([\w.-]+\.yml)@",
+                                   str(job.get("uses", "")))
+                      if not m or m.group(1) not in accepts:
+                          continue
+                      for key in (job.get("with") or {}):
+                          if key not in accepts[m.group(1)]:
+                              print(f"::error file=README.md::the {owner} sample passes '{key}' "
+                                    f"to {m.group(1)}, which does not accept it")
+                              failed = True
+
+          sys.exit(1 if failed else 0)
+          PY
