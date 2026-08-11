@@ -207,7 +207,8 @@ jobs:
         with:
           name: documentation
           path: build/dokka/**
-          if-no-files-found: warn
+          # A documentation task that exits cleanly without writing anything is not a passing check.
+          if-no-files-found: error
           retention-days: 14
 
   unit_tests:
