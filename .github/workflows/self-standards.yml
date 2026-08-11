@@ -21,7 +21,7 @@ permissions:
 jobs:
   standards:
     name: Standards
-    uses: $/.github/workflows/repository-standards.yml
+    uses: ./.github/workflows/repository-standards.yml
 
   documentation:
     name: Workflow Documentation
