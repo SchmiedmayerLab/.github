@@ -620,11 +620,16 @@ are optional and enable their jobs when present.
 Coverage is uploaded as JaCoCo XML from both the unit test and the instrumented test runs. Codecov
 cannot ingest JaCoCo's HTML output, only the XML.
 
-Instrumented coverage is opt-in per module: set `enableAndroidTestCoverage = true` on the debug build
-type and include `build/outputs/code_coverage/debugAndroidTest/connected/**/*.ec` in the
-`jacocoCoverageReport` execution data. Not every module can — JaCoCo's transform fails to instrument
-some large dependencies, HAPI FHIR among them, and the instrumented build then fails at
-`mergeExtDex`. Leave those modules opted out and say why in the build file.
+Turn instrumented coverage on by default in the build convention, and include
+`build/outputs/code_coverage/debugAndroidTest/connected/**/*.ec` in the `jacocoCoverageReport`
+execution data.
+
+A module whose dependency closure contains a class JaCoCo cannot instrument has to opt out. HAPI FHIR
+is one: its generated `JsonParser` is a 2 MB class, and instrumentation pushes it past the JVM class
+size limit, so the build fails at `mergeExtDex` with `ClassTooLargeException`. Neither a newer HAPI
+nor a newer JaCoCo helps, and there is no narrower remedy — `JacocoTransform` takes only a JaCoCo
+version, the `testCoverage` DSL only `jacocoVersion`, and JaCoCo has declined to skip oversized
+classes. The module is the smallest unit that can opt out, so opt out there and record why.
 
 Documentation deployment is deliberately not part of this workflow. A job that pushes to `gh-pages`
 needs `contents: write`, which a pull request caller should not grant — keep it in a separate
