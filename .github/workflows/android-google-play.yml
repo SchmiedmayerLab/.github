@@ -89,7 +89,7 @@ on:
         type: string
         default: ''
     secrets:
-      KEY_STORE:
+      KEY_STORE_BASE64:
         description: |
           Base64 of the Play upload keystore. Generate the keystore with
           `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9125 -keystore upload-keystore.jks`,
@@ -110,12 +110,12 @@ on:
           console, grant it release permissions in the Play Console under Users and permissions, and
           verify access with the Google Play Access Check workflow before relying on it.
         required: false
-      GOOGLE_SERVICES_JSON:
+      GOOGLE_SERVICES_JSON_BASE64:
         description: |
           Base64 of the Firebase `google-services.json` for the target project. Only read when
           `googleservicespath` is set.
         required: false
-      SECRETS_XML:
+      SECRETS_XML_BASE64:
         description: |
           Base64 of an Android string resource holding build-time secrets. Only read when
           `secretsxmlpath` is set.
@@ -234,20 +234,20 @@ jobs:
 
       - name: Write the Upload Keystore
         env:
-          KEY_STORE: ${{ secrets.KEY_STORE }}
+          KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
           ENVIRONMENT: ${{ inputs.environment }}
           KEYSTORE_PATHS: ${{ inputs.keystorepaths }}
         run: |
-          for name in KEY_STORE KEY_ALIAS KEY_PASSWORD SERVICE_ACCOUNT_JSON_KEY; do
+          for name in KEY_STORE_BASE64 KEY_ALIAS KEY_PASSWORD SERVICE_ACCOUNT_JSON_KEY; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is required to sign and upload the bundle; set it on the $ENVIRONMENT environment"
               exit 1
             fi
           done
-          printf '%s' "$KEY_STORE" | base64 --decode > /tmp/upload-keystore.jks
+          printf '%s' "$KEY_STORE_BASE64" | base64 --decode > /tmp/upload-keystore.jks
           while IFS= read -r destination; do
             [ -z "$destination" ] && continue
             install -d -m 700 "$(dirname "$destination")"
@@ -260,28 +260,28 @@ jobs:
       - name: Write the Google Services Configuration
         if: inputs.googleservicespath != ''
         env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GOOGLE_SERVICES_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
           DESTINATION: ${{ inputs.googleservicespath }}
         run: |
-          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
-            echo "::error::googleservicespath is set but GOOGLE_SERVICES_JSON is empty"
+          if [ -z "$GOOGLE_SERVICES_JSON_BASE64" ]; then
+            echo "::error::googleservicespath is set but GOOGLE_SERVICES_JSON_BASE64 is empty"
             exit 1
           fi
           install -d "$(dirname "$DESTINATION")"
-          printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > "$DESTINATION"
+          printf '%s' "$GOOGLE_SERVICES_JSON_BASE64" | base64 --decode > "$DESTINATION"
 
       - name: Write the Secrets Resource
         if: inputs.secretsxmlpath != ''
         env:
-          SECRETS_XML: ${{ secrets.SECRETS_XML }}
+          SECRETS_XML_BASE64: ${{ secrets.SECRETS_XML_BASE64 }}
           DESTINATION: ${{ inputs.secretsxmlpath }}
         run: |
-          if [ -z "$SECRETS_XML" ]; then
-            echo "::error::secretsxmlpath is set but SECRETS_XML is empty"
+          if [ -z "$SECRETS_XML_BASE64" ]; then
+            echo "::error::secretsxmlpath is set but SECRETS_XML_BASE64 is empty"
             exit 1
           fi
           install -d "$(dirname "$DESTINATION")"
-          printf '%s' "$SECRETS_XML" | base64 --decode > "$DESTINATION"
+          printf '%s' "$SECRETS_XML_BASE64" | base64 --decode > "$DESTINATION"
 
       - name: Build and Deploy
         env:

@@ -63,7 +63,7 @@ on:
         type: string
         default: ''
     secrets:
-      KEY_STORE:
+      KEY_STORE_BASE64:
         description: |
           Base64 of the Play upload keystore. Generate the keystore with
           `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9125 -keystore upload-keystore.jks`,
@@ -135,19 +135,19 @@ jobs:
 
       - name: Write the Upload Keystore
         env:
-          KEY_STORE: ${{ secrets.KEY_STORE }}
+          KEY_STORE_BASE64: ${{ secrets.KEY_STORE_BASE64 }}
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           ENVIRONMENT: ${{ inputs.environment }}
           KEYSTORE_PATHS: ${{ inputs.keystorepaths }}
         run: |
-          for name in KEY_STORE KEY_ALIAS KEY_PASSWORD; do
+          for name in KEY_STORE_BASE64 KEY_ALIAS KEY_PASSWORD; do
             if [ -z "${!name}" ]; then
               echo "::error::$name is required to sign the bundle; set it on the $ENVIRONMENT environment"
               exit 1
             fi
           done
-          printf '%s' "$KEY_STORE" | base64 --decode > /tmp/upload-keystore.jks
+          printf '%s' "$KEY_STORE_BASE64" | base64 --decode > /tmp/upload-keystore.jks
           while IFS= read -r destination; do
             [ -z "$destination" ] && continue
             install -d -m 700 "$(dirname "$destination")"
