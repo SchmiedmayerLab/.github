@@ -88,6 +88,7 @@ jobs:
       screenshots: ${{ steps.detect.outputs.screenshots }}
       connected: ${{ steps.detect.outputs.connected }}
       lfs: ${{ steps.detect.outputs.lfs }}
+      dokkatask: ${{ steps.detect.outputs.dokkatask }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -131,6 +132,14 @@ jobs:
           lfs=false
           [ -f .gitattributes ] && grep -qs 'filter=lfs' .gitattributes && lfs=true
 
+          # Dokka renamed its documentation task in v2; pick the one this project still has.
+          dokkatask=""
+          dokkamajor=$(grep -hoE '^dokka[[:space:]]*=[[:space:]]*"[0-9]+' gradle/libs.versions.toml 2>/dev/null \
+                       | grep -oE '[0-9]+$' | head -1)
+          if [ -n "$dokkamajor" ]; then
+            if [ "$dokkamajor" -ge 2 ]; then dokkatask=dokkaGenerate; else dokkatask=dokkaHtmlMultiModule; fi
+          fi
+
           {
             echo "java=$java"
             echo "ruby=$ruby"
@@ -139,8 +148,9 @@ jobs:
             echo "screenshots=$screenshots"
             echo "connected=$connected"
             echo "lfs=$lfs"
+            echo "dokkatask=$dokkatask"
           } >> "$GITHUB_OUTPUT"
-          echo "JDK $java · Ruby $ruby · detekt=$detekt ($detektconfig) · screenshots=$screenshots · connectedCheck=$connected · lfs=$lfs"
+          echo "JDK $java · Ruby $ruby · detekt=$detekt ($detektconfig) · screenshots=$screenshots · connectedCheck=$connected · lfs=$lfs · dokka=${dokkatask:-none}"
 
   detekt:
     name: Detekt
@@ -167,6 +177,36 @@ jobs:
         with:
           name: detekt-reports
           path: '**/build/reports/detekt/**'
+          if-no-files-found: warn
+          retention-days: 14
+
+  documentation:
+    name: Documentation
+    needs: detect
+    if: needs.detect.outputs.dokkatask != ''
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: ${{ needs.detect.outputs.java }}
+          cache: gradle
+      - uses: gradle/actions/setup-gradle@v6.2.0
+      - name: Build the Documentation
+        env:
+          DOKKA_TASK: ${{ needs.detect.outputs.dokkatask }}
+        run: ./gradlew "$DOKKA_TASK" --no-daemon
+      - name: Upload the Documentation
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: documentation
+          path: build/dokka/**
           if-no-files-found: warn
           retention-days: 14
 
