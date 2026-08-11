@@ -53,6 +53,31 @@ jobs:
           fi
           echo "Contents of $CONFIG_FILE:"
           cat "$CONFIG_FILE"
+      - name: Ignore Self-References in Private Repositories
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if ! private=$(gh api "repos/$REPO" --jq '.private'); then
+            echo "::error::could not read the visibility of $REPO"
+            exit 1
+          fi
+          if [ "$private" != "true" ]; then
+            echo "Public repository; every self-reference is reachable."
+            exit 0
+          fi
+          python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
+          python3 - <<'PY'
+          import os, pathlib, re, yaml
+          path = pathlib.Path(".linkspector.yml")
+          config = yaml.safe_load(path.read_text()) or {}
+          pattern = rf"^https://github\.com/{re.escape(os.environ['REPO'])}(/.*)?$"
+          patterns = config.setdefault("ignorePatterns", [])
+          if not any(entry.get("pattern") == pattern for entry in patterns):
+              patterns.append({"pattern": pattern})
+              path.write_text(yaml.safe_dump(config, sort_keys=False))
+          print(f"Private repository; ignoring {pattern}")
+          PY
       - name: Linkspector
         uses: umbrelladocs/action-linkspector@v1
         with:

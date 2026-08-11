@@ -20,6 +20,47 @@ This repository provides default community health files, reusable GitHub Actions
 
 This repository publishes reusable GitHub Actions workflows for common Schmiedmayer Lab project tasks.
 Use them from another repository with `jobs.<job_id>.uses` and a version tag.
+Each workflow documents its own inputs and secrets in its `workflow_call` block.
+
+### Secrets and Repository Setup
+
+Where a value belongs:
+
+| Scope | When to use it |
+|---|---|
+| Organization secret | The value is the same everywhere. Restrict it to the repositories that need it. |
+| Repository secret | The value differs per repository and is not tied to a deployment target. |
+| Environment secret | The value differs per deployment target, or the deployment should require approval. |
+| Repository or environment variable | Not sensitive: project identifiers, bundle identifiers, feature flags. |
+
+Deployment credentials belong on an environment. It is the only scope that can withhold a value until
+a reviewer approves the run, and the only one where staging and production can hold different values
+under the same name. A job that calls a reusable workflow cannot set `environment:` itself, so those
+workflows declare it on their own jobs.
+
+Encode binary material as Base64 and give the secret a `_BASE64` suffix. Public repositories do not
+need a Codecov token; private ones do.
+
+#### Repository baseline
+
+Applied by [`scripts/apply-repository-settings.sh`](scripts/apply-repository-settings.sh), which
+audits and re-applies it. Run it after creating a repository.
+
+| Setting | Value |
+|---|---|
+| Squash merge | the only merge method |
+| Delete branch on merge | enabled |
+| Wikis, Projects | disabled |
+| Secret scanning and push protection | enabled on every public repository |
+| Dependabot security updates | enabled |
+| Dependabot version updates | grouped, weekly, via `.github/dependabot.yml` |
+| Default workflow permissions | read |
+| Required status checks | the four `Standards / …` contexts |
+
+Because the default is read, a job starts with `contents: read` and `packages: read` and nothing
+else. Declaring a `permissions:` block **replaces** that default rather than adding to it, so list
+every scope the job needs. `repository-standards.yml` fails a pull request when a caller grants less
+than the workflow it calls requires.
 
 ### Workflow Catalog
 
@@ -49,11 +90,21 @@ Use them from another repository with `jobs.<job_id>.uses` and a version tag.
 | [`swift-package-test.yml`](#test-swift-package) | Test a Swift package across the configured Apple and Linux matrices. |
 | [`swift-test.yml`](#run-swift-tests) | Run SwiftPM tests and optionally export LCOV coverage. |
 | [`xcodebuild.yml`](#build-and-test-with-xcodebuild) | Build and test Apple projects with xcodebuild. |
+| [`xcodebuild-or-fastlane.yml`](#test-using-xcodebuild-or-run-fastlane) | Build, test, sign or deploy an Apple project through xcodebuild or a Fastlane lane. |
 | [`firebase-emulators-exec.yml`](#run-command-with-firebase-emulator) | Run a trusted command through the Firebase Emulator. |
 | [`xcode-deploy.yml`](#deploy-xcode-project) | Deploy Xcode projects with signing and file injection setup. |
 | [`xcarchive.yml`](#build-xcarchive) | Build an XCArchive and upload it as an artifact. |
 | [`xcframework.yml`](#build-xcframework) | Build an XCFramework from XCArchive artifacts. |
 | [`xcframework-release.yml`](#release-xcframework) | Commit and release an XCFramework artifact. |
+
+#### Android
+
+| Workflow | Use |
+|---|---|
+| [`android.yml`](#android-build-test-and-analysis) | Run the standard Android pipeline: Detekt, unit tests, CodeQL, screenshot tests, and instrumented tests. |
+| [`android-google-play.yml`](#android-google-play-deployment) | Sign an Android bundle and publish it to a Google Play track. |
+| [`android-google-play-bootstrap.yml`](#android-google-play-bootstrap) | Build the first signed bundle needed to create the Play Console listing. |
+| [`android-google-play-access.yml`](#android-google-play-access-check) | Verify that the Play service account can reach the application. |
 
 #### Web, Node.js, and Firebase
 
@@ -113,6 +164,11 @@ jobs:
 [`markdown-links.yml`](.github/workflows/markdown-links.yml) checks Markdown links with Linkspector.
 Use it for documentation-heavy repositories. The workflow needs read access to pull requests so
 Linkspector can map diagnostics to the pull request diff.
+
+Linkspector browses anonymously, so in a **private** repository every link back into that repository
+— badge targets, `blob/main/LICENSE.md` — answers 404 no matter what the file tree contains. The
+workflow therefore adds an ignore pattern for the repository's own URL when the repository is
+private, and leaves every other link checked.
 
 ```yml
 jobs:
@@ -190,6 +246,7 @@ jobs:
 ```
 
 #### Swift and Apple Platforms
+
 
 ##### Merge and Upload Coverage
 
@@ -380,6 +437,24 @@ jobs:
       scheme: TemplatePackage
 ```
 
+##### Test Using xcodebuild or Run Fastlane
+
+[`xcodebuild-or-fastlane.yml`](.github/workflows/xcodebuild-or-fastlane.yml) is the general-purpose
+Apple build workflow. It runs `xcodebuild` by default, or a named Fastlane lane instead, and can
+optionally set up code signing, a Firebase emulator, CodeQL, and injected configuration files.
+
+```yml
+jobs:
+  buildandtest:
+    name: Build and Test
+    uses: SchmiedmayerLab/.github/.github/workflows/xcodebuild-or-fastlane.yml@v0.5
+    permissions:
+      contents: read
+    with:
+      scheme: MyApp
+```
+
+
 ##### Run Command with Firebase Emulator
 
 Use [`firebase-emulators-exec.yml`](.github/workflows/firebase-emulators-exec.yml) for test or validation commands that must run while Firebase emulators are active.
@@ -484,7 +559,83 @@ jobs:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
 
+#### Android
+
+
+##### Android Build, Test, and Analysis
+
+[`android.yml`](.github/workflows/android.yml) runs Detekt, unit tests, CodeQL, screenshot tests and
+instrumented tests. It reads the JDK, the Ruby version, the Detekt configuration and the available
+Fastlane lanes from the project, so a conventional repository passes no inputs.
+
+```yml
+jobs:
+  android:
+    name: Android
+    uses: SchmiedmayerLab/.github/.github/workflows/android.yml@v0.5
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+      security-events: write
+    secrets: inherit
+```
+
+##### Android Google Play Deployment
+
+[`android-google-play.yml`](.github/workflows/android-google-play.yml) signs the app and publishes it
+to a Google Play track. Name the deployment environments after the tracks — `internal`, `alpha`,
+`beta`, `production` — so the environment carries that track's credentials and `track` never has to
+be passed.
+
+```yml
+  google_play:
+    name: Google Play Upload
+    needs: android
+    uses: SchmiedmayerLab/.github/.github/workflows/android-google-play.yml@v0.5
+    permissions:
+      contents: write
+    secrets: inherit
+    with:
+      environment: internal
+      recordversion: true
+```
+
+##### Android Google Play Bootstrap
+
+[`android-google-play-bootstrap.yml`](.github/workflows/android-google-play-bootstrap.yml) builds the
+first signed bundle, which Google Play requires before a listing exists, and uploads it as an
+artifact.
+
+```yml
+  signed_bundle:
+    name: Signed Bootstrap Bundle
+    needs: android
+    uses: SchmiedmayerLab/.github/.github/workflows/android-google-play-bootstrap.yml@v0.5
+    permissions:
+      contents: read
+    secrets: inherit
+    with:
+      version: 1.0.0
+```
+
+##### Android Google Play Access Check
+
+[`android-google-play-access.yml`](.github/workflows/android-google-play-access.yml) checks that the
+Play service account can reach the application. Run it before a release, or after rotating
+credentials.
+
+```yml
+  google_play_access:
+    name: Google Play Access
+    uses: SchmiedmayerLab/.github/.github/workflows/android-google-play-access.yml@v0.5
+    permissions:
+      contents: read
+    secrets: inherit
+```
+
 #### Web, Node.js, and Firebase
+
 
 ##### Deploy Firebase
 
@@ -576,6 +727,7 @@ jobs:
 
 #### Containers
 
+
 ##### Build and Push Docker Image
 
 Use [`docker-build-and-push.yml`](.github/workflows/docker-build-and-push.yml) to publish a multi-architecture Docker image.
@@ -608,6 +760,7 @@ jobs:
 ```
 
 #### Releases
+
 
 ##### Tag Action Release
 

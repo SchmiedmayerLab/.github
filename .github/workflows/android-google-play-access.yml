@@ -1,0 +1,80 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Android Google Play Access Check
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: |
+          GitHub deployment environment holding the service account key. Environments are named after the Google
+          Play tracks, so this is one of internal, alpha, beta or production.
+        required: false
+        type: string
+        default: internal
+      runsonlabels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      rubyversion:
+        description: |
+          Ruby version for Fastlane. Read from .ruby-version when empty, otherwise 3.3.
+        required: false
+        type: string
+        default: ''
+    secrets:
+      SERVICE_ACCOUNT_JSON_KEY:
+        description: |
+          Contents of the Google Play service account JSON key. Create the account in the Google Cloud
+          console, grant it release permissions in the Play Console under Users and permissions, and
+          verify access with the Google Play Access Check workflow before relying on it.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  google_play_access:
+    name: Google Play Access
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read the Ruby Version
+        id: toolchain
+        env:
+          RUBY_OVERRIDE: ${{ inputs.rubyversion }}
+        run: |
+          ruby="$RUBY_OVERRIDE"
+          [ -z "$ruby" ] && [ -f .ruby-version ] && ruby=$(tr -d '[:space:]' < .ruby-version)
+          [ -z "$ruby" ] && ruby=3.3
+          echo "ruby=$ruby" >> "$GITHUB_OUTPUT"
+          echo "Ruby $ruby"
+
+      - name: Set Up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ steps.toolchain.outputs.ruby }}
+          bundler-cache: true
+
+      - name: Validate Google Play Access
+        env:
+          SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
+          APPLICATION_ID: ${{ vars.APP_IDENTIFIER }}
+        run: >-
+          bundle exec fastlane validate_play_access
+          applicationid:"$APPLICATION_ID"

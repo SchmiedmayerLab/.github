@@ -48,6 +48,32 @@ require_standards_checks() {
   printf '%s' "$body" | gh api -X PUT "repos/$ORG/$repo/rulesets/$id" --silent --input -
 }
 
+# A required context that no longer exists blocks every merge, and renaming a job renames its
+# context. Report required checks that the default branch has not produced in its recent runs.
+report_stale_checks() {
+  local repo=$1 id=$2 branch required produced stale
+  # shellcheck disable=SC2034  # drift is the caller's array
+  if ! required=$(gh api "repos/$ORG/$repo/rulesets/$id" \
+    | jq -r '[.rules[]?|select(.type=="required_status_checks")
+             |.parameters.required_status_checks[]?.context]|.[]'); then
+    drift+=("could not read the required checks")
+    return 0
+  fi
+  [ -z "$required" ] && return 0
+  branch=$(gh api "repos/$ORG/$repo" -q .default_branch) || { drift+=("could not read the default branch"); return 0; }
+  # a required context can be a check run or a commit status; both must be consulted
+  if ! produced=$( { gh api --paginate "repos/$ORG/$repo/commits/$branch/check-runs" -q '.check_runs[]?.name'
+                     gh api --paginate "repos/$ORG/$repo/commits/$branch/status"     -q '.statuses[]?.context'; } ); then
+    drift+=("could not read the checks produced on $branch")
+    return 0
+  fi
+  stale=$(comm -23 <(printf '%s\n' "$required" | sort -u) <(printf '%s\n' "$produced" | sort -u))
+  while IFS= read -r context; do
+    [ -n "$context" ] || continue
+    drift+=("required check not produced on the latest $branch commit: $context")
+  done <<< "$stale"
+}
+
 ruleset_payload() {
   cat <<'JSON'
 {
@@ -114,8 +140,10 @@ for repo in $repos; do
     [ -n "$main_id" ] || drift+=("no active Main ruleset")
     if [ -n "$main_id" ] && has_standards_caller "$repo"; then
       missing=$(gh api "repos/$ORG/$repo/rulesets/$main_id" | jq -r --argjson want "$STANDARDS_CHECKS" '
-        [$want[] | select(. as $c | ([.. | objects | select(has("context")) | .context] | index($c) | not))] | join(", ")')
+        [.. | objects | select(has("context")) | .context] as $have
+        | [$want[] | . as $c | select($have | index($c) | not)] | join(", ")')
       [ -z "$missing" ] || drift+=("standards checks not required: $missing")
+      report_stale_checks "$repo" "$main_id"
     fi
   fi
 

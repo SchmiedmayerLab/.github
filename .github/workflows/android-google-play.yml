@@ -1,0 +1,342 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Android Google Play Deployment
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: |
+          GitHub deployment environment the upload runs in, holding APP_IDENTIFIER and the signing
+          credentials. Environments are named after the Google Play tracks — internal, alpha, beta,
+          production — so the environment is normally also the track.
+        required: true
+        type: string
+      track:
+        description: |
+          Google Play track, for the rare case where it differs from the environment name. Prefer
+          creating the environment: a track named here without a matching environment publishes with
+          no credentials.
+        required: false
+        type: string
+        default: ''
+      version:
+        description: |
+          Semantic version to publish. Derived from the tags when empty.
+        required: false
+        type: string
+        default: ''
+      versionproperty:
+        description: |
+          gradle.properties key holding the declared version. The published version is the
+          higher of that value and the latest release tag with its patch incremented.
+        required: false
+        type: string
+        default: 'app.versionName'
+      recordversion:
+        description: |
+          Write the published version back to the gradle.properties key and commit it, so the
+          declared version never trails what is on the store. Needs contents: write.
+        required: false
+        type: boolean
+        default: false
+      releasenotes:
+        description: |
+          Release notes to publish alongside the build.
+        required: false
+        type: string
+        default: ''
+      keystorepaths:
+        description: |
+          Newline-separated destinations for the decoded upload keystore.
+        required: false
+        type: string
+        default: 'deployment/secrets/upload-keystore.jks'
+      googleservicespath:
+        description: |
+          Destination for the decoded google-services.json. Skipped when empty.
+        required: false
+        type: string
+        default: ''
+      secretsxmlpath:
+        description: |
+          Destination for the decoded Android secrets resource. Skipped when empty.
+        required: false
+        type: string
+        default: ''
+      runsonlabels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      javaversion:
+        description: |
+          JDK major version. Detected from the Gradle build when empty.
+        required: false
+        type: string
+        default: ''
+      rubyversion:
+        description: |
+          Ruby version for Fastlane. Read from .ruby-version when empty, otherwise 3.3.
+        required: false
+        type: string
+        default: ''
+    secrets:
+      KEY_STORE:
+        description: |
+          Base64 of the Play upload keystore. Generate the keystore with
+          `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9125 -keystore upload-keystore.jks`,
+          then `base64 -i upload-keystore.jks`. Store it on the deployment environment, not the
+          repository.
+        required: false
+      KEY_ALIAS:
+        description: |
+          Alias of the signing key inside the upload keystore, as passed to `keytool -alias`.
+        required: false
+      KEY_PASSWORD:
+        description: |
+          Password protecting both the upload keystore and the key inside it.
+        required: false
+      SERVICE_ACCOUNT_JSON_KEY:
+        description: |
+          Contents of the Google Play service account JSON key. Create the account in the Google Cloud
+          console, grant it release permissions in the Play Console under Users and permissions, and
+          verify access with the Google Play Access Check workflow before relying on it.
+        required: false
+      GOOGLE_SERVICES_JSON:
+        description: |
+          Base64 of the Firebase `google-services.json` for the target project. Only read when
+          `googleservicespath` is set.
+        required: false
+      SECRETS_XML:
+        description: |
+          Base64 of an Android string resource holding build-time secrets. Only read when
+          `secretsxmlpath` is set.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  configuration:
+    name: Deployment Configuration
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    permissions:
+      contents: read
+    outputs:
+      track: ${{ steps.configuration.outputs.track }}
+      version: ${{ steps.configuration.outputs.version }}
+      java: ${{ steps.configuration.outputs.java }}
+      ruby: ${{ steps.configuration.outputs.ruby }}
+    steps:
+      - name: Checkout Repository and Tags
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Resolve the Track, Version and Toolchain
+        id: configuration
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          REQUESTED_TRACK: ${{ inputs.track }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          VERSION_PROPERTY: ${{ inputs.versionproperty }}
+          JAVA_OVERRIDE: ${{ inputs.javaversion }}
+          RUBY_OVERRIDE: ${{ inputs.rubyversion }}
+        run: |
+          track="${REQUESTED_TRACK:-$ENVIRONMENT}"
+          version="$REQUESTED_VERSION"
+
+          latest_tag="$(git tag --list | awk '/^[0-9]+\.[0-9]+\.[0-9]+$/' | sort -V | tail -n 1)"
+          if [ -z "$version" ]; then
+            declared=""
+            if [ -n "$VERSION_PROPERTY" ] && [ -f gradle.properties ]; then
+              declared="$(awk -F= -v key="$VERSION_PROPERTY" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' gradle.properties)"
+              if [ -n "$declared" ] && ! echo "$declared" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+                echo "::error::${VERSION_PROPERTY} must use semantic versioning"
+                exit 1
+              fi
+            fi
+            if [ -n "$latest_tag" ]; then
+              IFS='.' read -r major minor patch <<< "$latest_tag"
+              bumped="${major}.${minor}.$((patch + 1))"
+            else
+              bumped=""
+            fi
+            if [ -n "$declared" ] && [ -n "$bumped" ]; then
+              version="$(printf '%s\n%s\n' "$declared" "$bumped" | sort -V | tail -n 1)"
+            else
+              version="${declared:-${bumped:-1.0.0}}"
+            fi
+          fi
+
+          if ! echo "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "::error::version must use semantic versioning, for example 1.2.3, got '$version'"
+            exit 1
+          fi
+
+          java="$JAVA_OVERRIDE"
+          if [ -z "$java" ]; then
+            java=$(grep -rhoE 'jvmToolchain\(([0-9]+)\)' --include='*.gradle.kts' --include='*.gradle' . 2>/dev/null \
+                   | grep -oE '[0-9]+' | sort -rn | head -1)
+          fi
+          if [ -z "$java" ]; then
+            java=$(grep -rhoE 'JavaVersion\.VERSION_[0-9_]+' --include='*.gradle.kts' --include='*.gradle' . 2>/dev/null \
+                   | sed 's/.*VERSION_//; s/1_//' | sort -rn | head -1)
+          fi
+          [ -z "$java" ] && java=21
+
+          ruby="$RUBY_OVERRIDE"
+          [ -z "$ruby" ] && [ -f .ruby-version ] && ruby=$(tr -d '[:space:]' < .ruby-version)
+          [ -z "$ruby" ] && ruby=3.3
+
+          {
+            echo "track=$track"
+            echo "version=$version"
+            echo "java=$java"
+            echo "ruby=$ruby"
+          } >> "$GITHUB_OUTPUT"
+          echo "track $track · version $version · JDK $java · Ruby $ruby"
+
+  google_play:
+    name: Google Play Upload
+    needs: configuration
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set Up JDK ${{ needs.configuration.outputs.java }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ needs.configuration.outputs.java }}
+          cache: gradle
+
+      - name: Set Up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ needs.configuration.outputs.ruby }}
+          bundler-cache: true
+
+      - name: Write the Upload Keystore
+        env:
+          KEY_STORE: ${{ secrets.KEY_STORE }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          KEYSTORE_PATHS: ${{ inputs.keystorepaths }}
+        run: |
+          for name in KEY_STORE KEY_ALIAS KEY_PASSWORD SERVICE_ACCOUNT_JSON_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required to sign and upload the bundle; set it on the $ENVIRONMENT environment"
+              exit 1
+            fi
+          done
+          printf '%s' "$KEY_STORE" | base64 --decode > /tmp/upload-keystore.jks
+          while IFS= read -r destination; do
+            [ -z "$destination" ] && continue
+            install -d -m 700 "$(dirname "$destination")"
+            cp /tmp/upload-keystore.jks "$destination"
+            chmod 600 "$destination"
+            echo "wrote $destination"
+          done <<< "$KEYSTORE_PATHS"
+          rm -f /tmp/upload-keystore.jks
+
+      - name: Write the Google Services Configuration
+        if: inputs.googleservicespath != ''
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          DESTINATION: ${{ inputs.googleservicespath }}
+        run: |
+          if [ -z "$GOOGLE_SERVICES_JSON" ]; then
+            echo "::error::googleservicespath is set but GOOGLE_SERVICES_JSON is empty"
+            exit 1
+          fi
+          install -d "$(dirname "$DESTINATION")"
+          printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > "$DESTINATION"
+
+      - name: Write the Secrets Resource
+        if: inputs.secretsxmlpath != ''
+        env:
+          SECRETS_XML: ${{ secrets.SECRETS_XML }}
+          DESTINATION: ${{ inputs.secretsxmlpath }}
+        run: |
+          if [ -z "$SECRETS_XML" ]; then
+            echo "::error::secretsxmlpath is set but SECRETS_XML is empty"
+            exit 1
+          fi
+          install -d "$(dirname "$DESTINATION")"
+          printf '%s' "$SECRETS_XML" | base64 --decode > "$DESTINATION"
+
+      - name: Build and Deploy
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
+          RELEASE_NOTES: ${{ inputs.releasenotes }}
+          TRACK: ${{ needs.configuration.outputs.track }}
+          APPLICATION_ID: ${{ vars.APP_IDENTIFIER }}
+          VERSION_NAME: ${{ needs.configuration.outputs.version }}
+        run: >-
+          bundle exec fastlane deployment
+          environment:"$TRACK"
+          applicationid:"$APPLICATION_ID"
+          versionname:"$VERSION_NAME"
+
+  record_version:
+    name: Record the Published Version
+    if: inputs.recordversion && inputs.versionproperty != ''
+    needs:
+      - configuration
+      - google_play
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Write the Version Back to gradle.properties
+        env:
+          VERSION_PROPERTY: ${{ inputs.versionproperty }}
+          VERSION: ${{ needs.configuration.outputs.version }}
+        run: |
+          if [ ! -f gradle.properties ]; then
+            echo "::error::gradle.properties not found"
+            exit 1
+          fi
+          current="$(awk -F= -v key="$VERSION_PROPERTY" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' gradle.properties)"
+          if [ "$current" = "$VERSION" ]; then
+            echo "${VERSION_PROPERTY} already records $VERSION"
+            exit 0
+          fi
+          if [ -z "$current" ]; then
+            echo "::error::gradle.properties does not declare ${VERSION_PROPERTY}"
+            exit 1
+          fi
+          awk -F= -v key="$VERSION_PROPERTY" -v value="$VERSION" \
+            '$1 == key {print key "=" value; next} {print}' gradle.properties > gradle.properties.new
+          mv gradle.properties.new gradle.properties
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add gradle.properties
+          git commit -m "Record the Published Version ${VERSION}"
+          git push
+          echo "${VERSION_PROPERTY} updated from $current to $VERSION"

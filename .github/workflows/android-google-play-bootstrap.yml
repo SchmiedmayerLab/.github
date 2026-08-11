@@ -1,0 +1,178 @@
+#
+# This source file is part of the Schmiedmayer Lab open-source organization
+#
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+#
+# SPDX-License-Identifier: MIT
+#
+
+name: Android Google Play Bootstrap
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: |
+          Semantic version for the first signed bundle.
+        required: false
+        type: string
+        default: '1.0.0'
+      environment:
+        description: |
+          GitHub deployment environment holding the signing credentials. Environments are named after the Google
+          Play tracks, so this is one of internal, alpha, beta or production.
+        required: false
+        type: string
+        default: internal
+      artifactname:
+        description: |
+          Name of the uploaded artifact. Defaults to the repository name and version.
+        required: false
+        type: string
+        default: ''
+      artifactpaths:
+        description: |
+          Newline-separated paths to upload. Defaults to the release bundle and mapping file.
+        required: false
+        type: string
+        default: |
+          **/build/outputs/bundle/release/*.aab
+          **/build/outputs/mapping/release/mapping.txt
+      keystorepaths:
+        description: |
+          Newline-separated destinations for the decoded upload keystore.
+        required: false
+        type: string
+        default: 'deployment/secrets/upload-keystore.jks'
+      runsonlabels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
+      javaversion:
+        description: |
+          JDK major version. Detected from the Gradle build when empty.
+        required: false
+        type: string
+        default: ''
+      rubyversion:
+        description: |
+          Ruby version for Fastlane. Read from .ruby-version when empty, otherwise 3.3.
+        required: false
+        type: string
+        default: ''
+    secrets:
+      KEY_STORE:
+        description: |
+          Base64 of the Play upload keystore. Generate the keystore with
+          `keytool -genkeypair -keyalg RSA -keysize 2048 -validity 9125 -keystore upload-keystore.jks`,
+          then `base64 -i upload-keystore.jks`. Store it on the deployment environment, not the
+          repository.
+        required: false
+      KEY_ALIAS:
+        description: |
+          Alias of the signing key inside the upload keystore, as passed to `keytool -alias`.
+        required: false
+      KEY_PASSWORD:
+        description: |
+          Password protecting both the upload keystore and the key inside it.
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  signed_bundle:
+    name: Signed Bootstrap Bundle
+    runs-on: ${{ fromJson(inputs.runsonlabels) }}
+    environment: ${{ inputs.environment }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Read the Project Toolchain
+        id: toolchain
+        env:
+          JAVA_OVERRIDE: ${{ inputs.javaversion }}
+          RUBY_OVERRIDE: ${{ inputs.rubyversion }}
+        run: |
+          java="$JAVA_OVERRIDE"
+          if [ -z "$java" ]; then
+            java=$(grep -rhoE 'jvmToolchain\(([0-9]+)\)' --include='*.gradle.kts' --include='*.gradle' . 2>/dev/null \
+                   | grep -oE '[0-9]+' | sort -rn | head -1)
+          fi
+          if [ -z "$java" ]; then
+            java=$(grep -rhoE 'JavaVersion\.VERSION_[0-9_]+' --include='*.gradle.kts' --include='*.gradle' . 2>/dev/null \
+                   | sed 's/.*VERSION_//; s/1_//' | sort -rn | head -1)
+          fi
+          [ -z "$java" ] && java=21
+          ruby="$RUBY_OVERRIDE"
+          [ -z "$ruby" ] && [ -f .ruby-version ] && ruby=$(tr -d '[:space:]' < .ruby-version)
+          [ -z "$ruby" ] && ruby=3.3
+          {
+            echo "java=$java"
+            echo "ruby=$ruby"
+          } >> "$GITHUB_OUTPUT"
+          echo "JDK $java · Ruby $ruby"
+
+      - name: Set Up JDK ${{ steps.toolchain.outputs.java }}
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: ${{ steps.toolchain.outputs.java }}
+          cache: gradle
+
+      - name: Set Up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ steps.toolchain.outputs.ruby }}
+          bundler-cache: true
+
+      - name: Write the Upload Keystore
+        env:
+          KEY_STORE: ${{ secrets.KEY_STORE }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          KEYSTORE_PATHS: ${{ inputs.keystorepaths }}
+        run: |
+          for name in KEY_STORE KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required to sign the bundle; set it on the $ENVIRONMENT environment"
+              exit 1
+            fi
+          done
+          printf '%s' "$KEY_STORE" | base64 --decode > /tmp/upload-keystore.jks
+          while IFS= read -r destination; do
+            [ -z "$destination" ] && continue
+            install -d -m 700 "$(dirname "$destination")"
+            cp /tmp/upload-keystore.jks "$destination"
+            chmod 600 "$destination"
+            echo "wrote $destination"
+          done <<< "$KEYSTORE_PATHS"
+          rm -f /tmp/upload-keystore.jks
+
+      - name: Build the Signed Bundle
+        env:
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          APPLICATION_ID: ${{ vars.APP_IDENTIFIER }}
+          VERSION_NAME: ${{ inputs.version }}
+        run: >-
+          bundle exec fastlane bootstrap_bundle
+          applicationid:"$APPLICATION_ID"
+          versioncode:1
+          versionname:"$VERSION_NAME"
+
+      - name: Upload the Signed Bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ inputs.artifactname || format('{0}-{1}-bootstrap', github.event.repository.name, inputs.version) }}
+          path: ${{ inputs.artifactpaths }}
+          if-no-files-found: error
+          retention-days: 14

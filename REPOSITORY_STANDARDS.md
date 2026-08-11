@@ -51,7 +51,7 @@ Directly under the `# Project Name` heading, one per line, in the order below: h
 [![CodeQL](https://github.com/SchmiedmayerLab/REPO/actions/workflows/codeql.yml/badge.svg)](https://github.com/SchmiedmayerLab/REPO/actions/workflows/codeql.yml)
 [![Codecov](https://codecov.io/gh/SchmiedmayerLab/REPO/branch/main/graph/badge.svg)](https://codecov.io/gh/SchmiedmayerLab/REPO)
 [![REUSE status](https://api.reuse.software/badge/github.com/SchmiedmayerLab/REPO)](https://api.reuse.software/info/github.com/SchmiedmayerLab/REPO)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/SchmiedmayerLab/REPO/blob/main/LICENSE.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 [![Release](https://img.shields.io/github/v/release/SchmiedmayerLab/REPO)](https://github.com/SchmiedmayerLab/REPO/releases)
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.CONCEPT_ID.svg)](https://doi.org/10.5281/zenodo.CONCEPT_ID)
 ```
