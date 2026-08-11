@@ -418,8 +418,8 @@ jobs:
         if: ${{ inputs.fastlanelane != '' }}
         run: |
             if ${{ inputs.setupfirebaseemulator }}; then
-                # We try to do an npm install in the functions directory.
-                npm --prefix ./functions install || true
+                # The functions directory sits next to firebase.json, which is not always the repository root.
+                npm --prefix "$(dirname "${{ inputs.firebasejsonpath }}")/functions" install || true
 
                 echo -n "${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}" | base64 -d > "$RUNNER_TEMP/google-application-credentials.json"
                 export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
