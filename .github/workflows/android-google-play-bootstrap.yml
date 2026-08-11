@@ -19,10 +19,11 @@ on:
         default: '1.0.0'
       environment:
         description: |
-          GitHub deployment environment holding the signing credentials.
+          GitHub deployment environment holding the signing credentials. Environments are named after the Google
+          Play tracks, so this is one of internal, alpha, beta or production.
         required: false
         type: string
-        default: staging
+        default: internal
       artifactname:
         description: |
           Name of the uploaded artifact. Defaults to the repository name and version.
@@ -63,13 +64,18 @@ on:
         default: ''
     secrets:
       KEY_STORE:
-        description: Base64-encoded upload keystore.
+        description: |
+          Base64 of the Play upload keystore. Create it once with the Google Play Bootstrap workflow,
+          or export the existing key with keytool, then `base64 -i upload-keystore.jks`.
+          Store it on the deployment environment, not the repository.
         required: false
       KEY_ALIAS:
-        description: Alias inside the upload keystore.
+        description: |
+          Alias of the signing key inside the upload keystore, as passed to `keytool -alias`.
         required: false
       KEY_PASSWORD:
-        description: Password for the upload keystore and key.
+        description: |
+          Password protecting both the upload keystore and the key inside it.
         required: false
 
 permissions:
@@ -129,12 +135,17 @@ jobs:
       - name: Write the Upload Keystore
         env:
           KEY_STORE: ${{ secrets.KEY_STORE }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          ENVIRONMENT: ${{ inputs.environment }}
           KEYSTORE_PATHS: ${{ inputs.keystorepaths }}
         run: |
-          if [ -z "$KEY_STORE" ]; then
-            echo "::error::KEY_STORE is required to sign the bundle"
-            exit 1
-          fi
+          for name in KEY_STORE KEY_ALIAS KEY_PASSWORD; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required to sign the bundle; set it on the $ENVIRONMENT environment"
+              exit 1
+            fi
+          done
           printf '%s' "$KEY_STORE" | base64 --decode > /tmp/upload-keystore.jks
           while IFS= read -r destination; do
             [ -z "$destination" ] && continue

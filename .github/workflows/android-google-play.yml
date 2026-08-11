@@ -13,12 +13,16 @@ on:
     inputs:
       environment:
         description: |
-          GitHub deployment environment the upload runs in.
+          GitHub deployment environment the upload runs in, holding APP_IDENTIFIER and the signing
+          credentials. Environments are named after the Google Play tracks — internal, alpha, beta,
+          production — so the environment is normally also the track.
         required: true
         type: string
       track:
         description: |
-          Google Play track. Defaults to the environment name.
+          Google Play track, for the rare case where it differs from the environment name. Prefer
+          creating the environment: a track named here without a matching environment publishes with
+          no credentials.
         required: false
         type: string
         default: ''
@@ -86,22 +90,34 @@ on:
         default: ''
     secrets:
       KEY_STORE:
-        description: Base64-encoded upload keystore.
+        description: |
+          Base64 of the Play upload keystore. Create it once with the Google Play Bootstrap workflow,
+          or export the existing key with keytool, then `base64 -i upload-keystore.jks`.
+          Store it on the deployment environment, not the repository.
         required: false
       KEY_ALIAS:
-        description: Alias inside the upload keystore.
+        description: |
+          Alias of the signing key inside the upload keystore, as passed to `keytool -alias`.
         required: false
       KEY_PASSWORD:
-        description: Password for the upload keystore and key.
+        description: |
+          Password protecting both the upload keystore and the key inside it.
         required: false
       SERVICE_ACCOUNT_JSON_KEY:
-        description: Google Play service account key.
+        description: |
+          Contents of the Google Play service account JSON key. Create the account in the Google Cloud
+          console, grant it release permissions in the Play Console under Users and permissions, and
+          verify access with the Google Play Access Check workflow before relying on it.
         required: false
       GOOGLE_SERVICES_JSON:
-        description: Base64-encoded google-services.json.
+        description: |
+          Base64 of the Firebase `google-services.json` for the target project. Only read when
+          `googleservicespath` is set.
         required: false
       SECRETS_XML:
-        description: Base64-encoded Android secrets resource.
+        description: |
+          Base64 of an Android string resource holding build-time secrets. Only read when
+          `secretsxmlpath` is set.
         required: false
 
 permissions:
@@ -218,12 +234,18 @@ jobs:
       - name: Write the Upload Keystore
         env:
           KEY_STORE: ${{ secrets.KEY_STORE }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          SERVICE_ACCOUNT_JSON_KEY: ${{ secrets.SERVICE_ACCOUNT_JSON_KEY }}
+          ENVIRONMENT: ${{ inputs.environment }}
           KEYSTORE_PATHS: ${{ inputs.keystorepaths }}
         run: |
-          if [ -z "$KEY_STORE" ]; then
-            echo "::error::KEY_STORE is required to sign the bundle"
-            exit 1
-          fi
+          for name in KEY_STORE KEY_ALIAS KEY_PASSWORD SERVICE_ACCOUNT_JSON_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is required to sign and upload the bundle; set it on the $ENVIRONMENT environment"
+              exit 1
+            fi
+          done
           printf '%s' "$KEY_STORE" | base64 --decode > /tmp/upload-keystore.jks
           while IFS= read -r destination; do
             [ -z "$destination" ] && continue

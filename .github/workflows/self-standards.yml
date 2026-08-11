@@ -42,61 +42,49 @@ jobs:
           reference = readme[readme.index("### Workflow Reference"):]
           catalog = set(re.findall(r"^\| \[`([\w.-]+\.yml)`\]", readme, re.M))
 
-          # a workflow entry ends at the next heading of level five or higher, not only at the next #####
           sections = {}
           chunks = re.split(r"(?m)^(#{1,5} .*)$", reference)
           for i in range(1, len(chunks), 2):
               if not chunks[i].startswith("##### "):
                   continue
-              body = chunks[i + 1]
-              m = re.search(r"\]\(\.github/workflows/([\w.-]+\.yml)\)", body)
+              m = re.search(r"\]\(\.github/workflows/([\w.-]+\.yml)\)", chunks[i + 1])
               if m:
-                  sections[m.group(1)] = body
+                  sections[m.group(1)] = chunks[i + 1]
 
           failed = False
-          samples, accepts = {}, {}
+          accepts = {}
           for f in sorted(SHARED.glob("*.yml")):
               doc = yaml.safe_load(f.read_text()) or {}
               on = doc.get("on", doc.get(True))
               if not (isinstance(on, dict) and "workflow_call" in on):
                   continue
               call = on["workflow_call"] or {}
-              declared = set((call.get("secrets") or {}).keys())
+              accepts[f.name] = set((call.get("inputs") or {}).keys())
+
+              # the workflow is the reference: every input and secret documents itself
+              for kind in ("inputs", "secrets"):
+                  for name, spec in (call.get(kind) or {}).items():
+                      description = (spec or {}).get("description", "")
+                      if not str(description).strip():
+                          print(f"::error file={f}::{kind[:-1]} '{name}' has no description")
+                          failed = True
 
               if f.name not in catalog:
                   print(f"::error file=README.md::{f.name} is missing from the workflow catalog")
                   failed = True
-              section = sections.get(f.name)
-              if section is None:
+              if f.name not in sections:
                   print(f"::error file=README.md::{f.name} has no entry under Workflow Reference")
                   failed = True
-                  continue
-
-              stated = set(re.findall(r"`([A-Za-z_][A-Za-z0-9_-]*)`",
-                                      re.search(r"^\*\*Secrets:\*\*(.*)$", section, re.M).group(1)
-                                      if re.search(r"^\*\*Secrets:\*\*", section, re.M) else ""))
-              if not re.search(r"^\*\*Secrets:\*\*", section, re.M):
-                  print(f"::error file=README.md::{f.name} does not state its secrets")
-                  failed = True
-                  continue
-              for missing in sorted(declared - stated):
-                  print(f"::error file=README.md::{f.name} declares secret '{missing}' but the README omits it")
-                  failed = True
-              for extra in sorted(stated - declared):
-                  print(f"::error file=README.md::{f.name} does not declare secret '{extra}' that the README lists")
-                  failed = True
-
-              samples[f.name] = section
-              accepts[f.name] = set((call.get("inputs") or {}).keys())
 
           # a usage sample must not pass an input the workflow it calls does not accept
-          for owner, section in samples.items():
+          for owner, section in sections.items():
               for sample in re.findall(r"```yml\n(.*?)```", section, re.S):
                   try:
                       parsed = yaml.safe_load(sample) or {}
                   except Exception:
                       continue
-                  for job in (parsed.get("jobs") or parsed).values() if isinstance(parsed, dict) else []:
+                  jobs = parsed.get("jobs") or parsed
+                  for job in (jobs.values() if isinstance(jobs, dict) else []):
                       if not isinstance(job, dict):
                           continue
                       m = re.match(r"SchmiedmayerLab/\.github/\.github/workflows/([\w.-]+\.yml)@",

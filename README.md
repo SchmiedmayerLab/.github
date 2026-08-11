@@ -20,9 +20,67 @@ This repository provides default community health files, reusable GitHub Actions
 
 This repository publishes reusable GitHub Actions workflows for common Schmiedmayer Lab project tasks.
 Use them from another repository with `jobs.<job_id>.uses` and a version tag.
-Each entry under [Workflow Reference](#workflow-reference) states the secrets that workflow takes.
-[SECRETS.md](SECRETS.md) covers where a value belongs and the repository settings these workflows
-assume.
+Each workflow documents its own inputs and secrets in its `workflow_call` block — what a value is,
+and how to obtain it. That block is the reference; this file describes what the workflows are for and
+how to call them.
+
+### Secrets and Repository Setup
+
+Which secrets a workflow takes, and what each one is, is declared in that workflow's `workflow_call`
+block. What follows is the part that is not per-workflow: where a value belongs, and what a repository
+has to be set to.
+
+| Scope | When to use it |
+|---|---|
+| Organization secret | The value is the same everywhere. Restrict it to the repositories that need it. |
+| Repository secret | The value differs per repository and is not tied to a deployment target. |
+| Environment secret | The value differs per deployment target, or the deployment should require approval. |
+| Repository or environment variable | Not sensitive: project identifiers, bundle identifiers, feature flags. |
+
+**Deployment credentials belong in an environment**, not in a repository secret. An environment is the
+only one of these that can withhold a value until a reviewer approves the run, and the only one that
+lets staging and production hold different values under the same name.
+
+Two consequences worth knowing:
+
+- A job that calls a reusable workflow **cannot set `environment:`**. Workflows that need an
+  environment declare it on their own jobs, which is what makes environment-scoped secrets and
+  variables resolve. `secrets: inherit` passes organization and repository secrets; the environment's
+  own values are read by the called job.
+- The name a repository stores a secret under does not have to match the name the workflow takes. A
+  repository with several deployment targets may hold `..._PRODUCTION_US` and `..._PRODUCTION_UK` and
+  pass whichever applies into the single secret the workflow declares. Those caller-side names are a
+  repository's own business.
+
+Encode binary material — keystores, certificates, provisioning profiles, service account keys, plist
+and JSON configuration — as Base64, and say so in the name with a `_BASE64` suffix where the workflow
+does.
+
+Public repositories do not need a Codecov token: Codecov accepts tokenless uploads from public
+repositories, and the shared workflows set `fail_ci_if_error: false` so a missing token cannot fail a
+build. Private repositories still need one.
+
+#### Repository baseline
+
+Applied by [`scripts/apply-repository-settings.sh`](scripts/apply-repository-settings.sh), which
+audits and re-applies it. Run it after creating a repository.
+
+| Setting | Value |
+|---|---|
+| Squash merge | the only merge method |
+| Delete branch on merge | enabled |
+| Wikis, Projects | disabled |
+| Secret scanning and push protection | enabled on every public repository |
+| Dependabot security updates | enabled |
+| Dependabot version updates | grouped, weekly, via `.github/dependabot.yml` |
+| Default workflow permissions | read |
+| Required status checks | the four `Standards / …` contexts |
+
+**Default workflow permissions are read.** A job starts with `contents: read` and `packages: read` and
+nothing else. Any job calling a reusable workflow that needs more must say so, and declaring a
+`permissions:` block **replaces** the default rather than adding to it — list every scope the job
+needs, not just the extra one. `repository-standards.yml` fails a pull request when a caller grants
+less than the workflow it calls requires.
 
 ### Workflow Catalog
 
@@ -109,8 +167,6 @@ jobs:
       runs_on_labels: '["ubuntu-latest"]'
 ```
 
-**Secrets:** none.
-
 ##### Run ESLint
 
 [`eslint.yml`](.github/workflows/eslint.yml) installs Node.js dependencies, runs the repository lint command, annotates pull requests, and uploads the ESLint report.
@@ -122,8 +178,6 @@ jobs:
     name: Run ESLint
     uses: SchmiedmayerLab/.github/.github/workflows/eslint.yml@v0.5
 ```
-
-**Secrets:** none.
 
 ##### Check Markdown Links
 
@@ -146,8 +200,6 @@ jobs:
       pull-requests: read
 ```
 
-**Secrets:** none.
-
 ##### Run Periphery
 
 [`periphery.yml`](.github/workflows/periphery.yml) runs Periphery to detect unused Swift declarations.
@@ -159,8 +211,6 @@ jobs:
     name: Run Periphery
     uses: SchmiedmayerLab/.github/.github/workflows/periphery.yml@v0.5
 ```
-
-**Secrets:** none.
 
 ##### Check Repository Standards
 
@@ -191,8 +241,6 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/repository-standards.yml@v0.5
 ```
 
-**Secrets:** none.
-
 ##### Check REUSE Compliance
 
 [`reuse.yml`](.github/workflows/reuse.yml) checks that files carry REUSE-compliant license and copyright metadata.
@@ -205,8 +253,6 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
 ```
 
-**Secrets:** none.
-
 ##### Run SwiftLint
 
 [`swiftlint.yml`](.github/workflows/swiftlint.yml) runs SwiftLint in strict mode.
@@ -218,8 +264,6 @@ jobs:
     name: Run SwiftLint
     uses: SchmiedmayerLab/.github/.github/workflows/swiftlint.yml@v0.5
 ```
-
-**Secrets:** none.
 
 #### Swift and Apple Platforms
 
@@ -240,8 +284,6 @@ jobs:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```
 
-**Secrets:** `token`
-
 ##### Deploy DocC Documentation
 
 [`docc-github-pages.yml`](.github/workflows/docc-github-pages.yml) builds DocC documentation with xcodebuild and deploys the generated site to GitHub Pages.
@@ -261,8 +303,6 @@ jobs:
       scheme: ExamplePackage
 ```
 
-**Secrets:** none.
-
 ##### Diagnose Swift API Breaking Changes
 
 [`swift-api-breaking-changes.yml`](.github/workflows/swift-api-breaking-changes.yml) detects library products and platform metadata before running Swift API breakage diagnostics.
@@ -274,8 +314,6 @@ jobs:
     name: Diagnose Swift API Breaking Changes
     uses: SchmiedmayerLab/.github/.github/workflows/swift-api-breaking-changes.yml@v0.5
 ```
-
-**Secrets:** none.
 
 ##### Diagnose Swift Package API Breaking Changes
 
@@ -293,8 +331,6 @@ jobs:
       platform_version: '18.0'
 ```
 
-**Secrets:** none.
-
 ##### Swift Package CI
 
 Use [`swift-package-ci.yml`](.github/workflows/swift-package-ci.yml) as the default entry point for Swift packages.
@@ -307,8 +343,6 @@ jobs:
     uses: SchmiedmayerLab/.github/.github/workflows/swift-package-ci.yml@v0.5
     secrets: inherit
 ```
-
-**Secrets:** `CODECOV_TOKEN`
 
 ##### Set Up Swift Package
 
@@ -331,8 +365,6 @@ jobs:
       ui_platform_matrix: ${{ needs.setup.outputs.ui_platform_matrix }}
 ```
 
-**Secrets:** none.
-
 ##### Analyze Swift Package
 
 [`swift-package-static-analysis.yml`](.github/workflows/swift-package-static-analysis.yml) combines REUSE, SwiftLint, Markdown link checking, and Swift API breakage diagnostics.
@@ -348,8 +380,6 @@ jobs:
       platform_name: ios
       platform_version: '18.0'
 ```
-
-**Secrets:** none.
 
 ##### Test Swift Package
 
@@ -371,8 +401,6 @@ jobs:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 ```
 
-**Secrets:** `CODECOV_TOKEN`
-
 ##### Run Swift Tests
 
 [`swift-test.yml`](.github/workflows/swift-test.yml) runs SwiftPM tests and can upload an LCOV artifact for later coverage merging.
@@ -384,8 +412,6 @@ jobs:
     name: Run Swift Tests
     uses: SchmiedmayerLab/.github/.github/workflows/swift-test.yml@v0.5
 ```
-
-**Secrets:** `CHECKOUT_TOKEN`
 
 ##### Build and Test with xcodebuild
 
@@ -431,8 +457,6 @@ jobs:
       scheme: TemplatePackage
 ```
 
-**Secrets:** `CHECKOUT_TOKEN`
-
 ##### Test Using xcodebuild or Run Fastlane
 
 [`xcodebuild-or-fastlane.yml`](.github/workflows/xcodebuild-or-fastlane.yml) is the general-purpose
@@ -450,36 +474,6 @@ jobs:
       scheme: MyApp
 ```
 
-| Input | Default | Effect |
-|---|---|---|
-| `job_name` | `Test using xcodebuild or run fastlane` | Display name of the job. |
-| `path` | `.` | Project directory. |
-| `runsonlabels` | `'["macos-26"]'` | Runner labels. |
-| `xcodeversion` | `latest-stable` | Xcode version to select. |
-| `scheme` | detected | Xcode scheme. Required when the project has more than one shared scheme. |
-| `buildConfig` | `Debug` | Build configuration. |
-| `destination` | an iOS Simulator destination | `xcodebuild` destination. |
-| `setupSimulators` | `False` | Prepare additional simulators before building. |
-| `resultBundle` | none | Path for the `.xcresult` bundle. |
-| `swiftVersion` | toolchain default | Swift version to select. |
-| `test` | `True` | Run tests as well as building. |
-| `testplan` | none | Test plan to run. |
-| `spm-disable-prebuilts` | `False` | Disable SwiftPM prebuilt binaries. |
-| `fastlanelane` | none | Run this Fastlane lane instead of `xcodebuild`. |
-| `customcommand` | none | Run this command instead. |
-| `artifactname` | none | Upload build output under this artifact name. |
-| `environment` | none | GitHub deployment environment. |
-| `setupsigning` | `False` | Install the certificate and provisioning profiles. |
-| `cacheDerivedData` | `False` | Cache DerivedData between runs. |
-| `setupfirebaseemulator` | `False` | Start the Firebase emulator for the run. |
-| `firebaseemulatorimport` | none | Emulator data to import. |
-| `firebasejsonpath` | `./firebase.json` | Firebase configuration path. |
-| `googleserviceinfoplistpath` | none | Destination for the injected `GoogleService-Info.plist`. |
-| `codeql` | `False` | Analyze the build with CodeQL. |
-| `checkout_submodules` | none | Submodule checkout mode. |
-| `checkout_lfs` | `False` | Fetch Git LFS objects. |
-
-**Secrets:** `APPLE_ID`, `APP_STORE_CONNECT_API_KEY_BASE64`, `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `BUILD_CERTIFICATE_BASE64`, `BUILD_PROVISION_PROFILE_BASE64`, `BUILD_SECONDARY_PROVISION_PROFILE_BASE64`, `CHECKOUT_TOKEN`, `GOOGLE_APPLICATION_CREDENTIALS_BASE64`, `GOOGLE_SERVICE_INFO_PLIST_BASE64`, `KEYCHAIN_PASSWORD`, `P12_PASSWORD`
 
 ##### Run Command with Firebase Emulator
 
@@ -499,8 +493,6 @@ jobs:
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
 ```
-
-**Secrets:** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`
 
 ##### Deploy Xcode Project
 
@@ -534,8 +526,6 @@ jobs:
       P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
 ```
 
-**Secrets:** `APPLE_ID`, `APP_STORE_CONNECT_API_KEY_BASE64`, `APP_STORE_CONNECT_API_KEY_ID`, `APP_STORE_CONNECT_ISSUER_ID`, `BUILD_CERTIFICATE_BASE64`, `BUILD_PROVISION_PROFILE_BASE64`, `BUILD_SECONDARY_PROVISION_PROFILE_BASE64`, `CHECKOUT_TOKEN`, `INJECTED_SECRET_FILE_BASE64`, `P12_PASSWORD`
-
 ##### Build XCArchive
 
 [`xcarchive.yml`](.github/workflows/xcarchive.yml) builds an XCArchive and uploads it as an artifact.
@@ -553,8 +543,6 @@ jobs:
       version: 0.1.0
 ```
 
-**Secrets:** none.
-
 ##### Build XCFramework
 
 Use [`xcframework.yml`](.github/workflows/xcframework.yml) to package XCArchive outputs into an XCFramework artifact.
@@ -570,8 +558,6 @@ jobs:
       scheme: ExampleKit
       version: 0.1.0
 ```
-
-**Secrets:** `access-token`
 
 ##### Release XCFramework
 
@@ -592,8 +578,6 @@ jobs:
     secrets:
       access-token: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 ```
-
-**Secrets:** `access-token`
 
 #### Android
 
@@ -629,17 +613,6 @@ jobs:
     secrets: inherit
 ```
 
-| Input | Default | Effect |
-|---|---|---|
-| `runsonlabels` | `'["ubuntu-latest"]'` | Runner labels. |
-| `javaversion` | detected | Overrides the JDK major version. |
-| `rubyversion` | detected, else `3.3` | Overrides the Ruby version. |
-| `apilevels` | `'[31, 34]'` | Android API levels for the instrumented matrix. |
-| `emulatortargets` | `'["default", "google_apis"]'` | Emulator targets for the instrumented matrix. |
-| `emulatorprofile` | `pixel_6` | Emulator device profile. |
-| `instrumentedtests` | `true` | Runs the instrumented matrix when a `connectedCheck` lane exists. |
-| `codeql` | `true` | Analyzes the build with CodeQL. |
-| `testtimeoutminutes` | `120` | Timeout for the unit test job. |
 
 The repository owns its Fastlane lanes. `test` is required; `screenshotTests` and `connectedCheck`
 are optional and enable their jobs when present.
@@ -652,8 +625,6 @@ and including `build/outputs/code_coverage/debugAndroidTest/connected/**/*.ec` i
 Documentation deployment is deliberately not part of this workflow. A job that pushes to `gh-pages`
 needs `contents: write`, which a pull request caller should not grant — keep it in a separate
 workflow triggered on `push` to `main`.
-
-**Secrets:** `CODECOV_TOKEN`
 
 ##### Android Google Play Deployment
 
@@ -678,20 +649,12 @@ read from the environment this workflow runs in.
       environment: staging
 ```
 
-| Input | Default | Effect |
-|---|---|---|
-| `environment` | required | GitHub deployment environment the upload runs in. |
-| `track` | the environment name | Google Play track, for the rare case where it differs from the environment. |
-| `version` | derived | Explicit semantic version. |
-| `versionproperty` | `app.versionName` | `gradle.properties` key holding the declared version. The published version is the higher of that value and the latest tag with its patch incremented. |
-| `recordversion` | `false` | Commit the published version back to that key, so the declared version never trails the store. Needs `contents: write`. |
-| `releasenotes` | none | Release notes to publish. |
-| `keystorepaths` | `deployment/secrets/upload-keystore.jks` | Newline-separated destinations for the decoded keystore. |
-| `googleservicespath` | none | Destination for `google-services.json`. Skipped when empty. |
-| `secretsxmlpath` | none | Destination for an Android secrets resource. Skipped when empty. |
 
-**Name the environments after the Play tracks.** With an `internal` and a `production` environment,
-the track is the environment and no project passes `track` at all. The input exists for the case
+**Name the environments after the Play tracks.** Google Play publishes to `internal`, `alpha`, `beta`
+and `production`, so a GitHub environment carries each track's credentials under the same name. The
+track is then the environment, `internal` is the default everywhere, and no project passes `track` at
+all. Put `APP_IDENTIFIER` and the signing credentials on those environments so a production upload
+requires the approval the environment enforces. The input exists for the case
 where a project publishes to a track that has no environment of its own — but prefer creating the
 environment, because a track offered as an environment that does not exist silently produces an empty
 environment with no credentials.
@@ -704,8 +667,6 @@ the tag and the store in agreement.
 Everything else — the bundle path, mapping path, metadata directory and signing configuration — stays
 in the project's `Fastfile`. This workflow moves bytes into place and invokes a lane; it does not
 duplicate what `APP_CONFIG` already declares.
-
-**Secrets:** `GOOGLE_SERVICES_JSON`, `KEY_ALIAS`, `KEY_PASSWORD`, `KEY_STORE`, `SECRETS_XML`, `SERVICE_ACCOUNT_JSON_KEY`
 
 ##### Android Google Play Bootstrap
 
@@ -725,15 +686,6 @@ first signed bundle, the one Google Play requires before a listing exists. It ru
       version: 1.0.0
 ```
 
-| Input | Default | Effect |
-|---|---|---|
-| `version` | `1.0.0` | Version for the first bundle. |
-| `environment` | `staging` | Environment holding the signing credentials. |
-| `artifactname` | repository name and version | Name of the uploaded artifact. |
-| `artifactpaths` | release bundle and mapping file | Newline-separated paths to upload. |
-| `keystorepaths` | `deployment/secrets/upload-keystore.jks` | Destinations for the decoded keystore. |
-
-**Secrets:** `KEY_ALIAS`, `KEY_PASSWORD`, `KEY_STORE`
 
 ##### Android Google Play Access Check
 
@@ -749,8 +701,6 @@ own, before a release, when Play credentials are rotated.
       contents: read
     secrets: inherit
 ```
-
-**Secrets:** `SERVICE_ACCOUNT_JSON_KEY`
 
 #### Web, Node.js, and Firebase
 
@@ -770,8 +720,6 @@ jobs:
     secrets:
       GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
 ```
-
-**Secrets:** `ENV_FILE`, `GOOGLE_APPLICATION_CREDENTIALS_BASE64`
 
 ##### Publish npm Packages
 
@@ -804,8 +752,6 @@ Callers pinned to an earlier release continue to use the earlier interface uncha
 When adopting v0.5, remove the former runtime, workspace, and npm-tag inputs because the workflow now reads the runtime from the repository, discovers workspaces, and selects `latest` or `next` from the version.
 Replace `bootstrapWithToken: true` with explicit package names in `bootstrapPackages`, or use `*` only when every unpublished package is intentionally being bootstrapped.
 
-**Secrets:** `NPM_TOKEN`
-
 ##### Build and Deploy npm Project Pages
 
 Use [`npm-pages.yml`](.github/workflows/npm-pages.yml) when an npm project can build its complete Pages artifact with `npm run pages:build`.
@@ -829,8 +775,6 @@ Call `npm run pages:build` directly in pull-request CI so that build jobs do not
 This convention also supports static Next.js exports, replacing the former framework-specific workflow.
 Existing callers can remain on their pinned Next.js workflow release until their repository provides `pages:build` and adopts `npm-pages.yml@v0.5`.
 
-**Secrets:** none.
-
 ##### Test npm Package and Upload Coverage
 
 Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm projects that should run `npm ci`, `npm test`, and upload coverage to Codecov.
@@ -848,8 +792,6 @@ jobs:
     secrets:
       token: ${{ secrets.CODECOV_TOKEN }}
 ```
-
-**Secrets:** `GOOGLE_APPLICATION_CREDENTIALS_BASE64`, `token`
 
 #### Containers
 
@@ -871,8 +813,6 @@ jobs:
       imageName: schmiedmayerlab/example
 ```
 
-**Secrets:** `password`, `username`
-
 ##### Test Docker Compose Stack
 
 [`docker-compose-test.yml`](.github/workflows/docker-compose-test.yml) builds and starts a Docker Compose stack and can run an optional smoke-test script.
@@ -886,8 +826,6 @@ jobs:
     with:
       testscript: scripts/smoke-test.sh
 ```
-
-**Secrets:** `ENV_FILE`
 
 #### Releases
 
@@ -911,8 +849,6 @@ jobs:
       user: PaulsAutomationBot
 ```
 
-**Secrets:** `access-token`
-
 ##### Format Release Notes
 
 [`format-release-notes.yml`](.github/workflows/format-release-notes.yml) fetches a GitHub release and formats its release notes for downstream release automation.
@@ -927,8 +863,6 @@ jobs:
       release-tag: ${{ github.ref_name }}
       repository: ${{ github.repository }}
 ```
-
-**Secrets:** none.
 
 ## Contributing
 

@@ -13,10 +13,11 @@ on:
     inputs:
       environment:
         description: |
-          GitHub deployment environment holding the service account key.
+          GitHub deployment environment holding the service account key. Environments are named after the Google
+          Play tracks, so this is one of internal, alpha, beta or production.
         required: false
         type: string
-        default: staging
+        default: internal
       runsonlabels:
         description: |
           JSON-based collection of labels indicating which type of GitHub runner should be chosen.
@@ -31,7 +32,10 @@ on:
         default: ''
     secrets:
       SERVICE_ACCOUNT_JSON_KEY:
-        description: Google Play service account key.
+        description: |
+          Contents of the Google Play service account JSON key. Create the account in the Google Cloud
+          console, grant it release permissions in the Play Console under Users and permissions, and
+          verify access with the Google Play Access Check workflow before relying on it.
         required: false
 
 permissions:
