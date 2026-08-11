@@ -51,20 +51,27 @@ require_standards_checks() {
 # A required context that no longer exists blocks every merge, and renaming a job renames its
 # context. Report required checks that the default branch has not produced in its recent runs.
 report_stale_checks() {
-  local repo=$1 id=$2 required produced stale
+  local repo=$1 id=$2 branch required produced stale
   # shellcheck disable=SC2034  # drift is the caller's array
-  required=$(gh api "repos/$ORG/$repo/rulesets/$id" \
+  if ! required=$(gh api "repos/$ORG/$repo/rulesets/$id" \
     | jq -r '[.rules[]?|select(.type=="required_status_checks")
-             |.parameters.required_status_checks[]?.context]|.[]' || true)
-  [ -z "$required" ] && return 0
-  produced=$(gh api "repos/$ORG/$repo/commits/$(gh api "repos/$ORG/$repo" -q .default_branch)/check-runs?per_page=100" \
-    -q '[.check_runs[]?.name]|.[]' 2>/dev/null || true)
-  stale=$(comm -23 <(printf '%s\n' "$required" | sort -u) <(printf '%s\n' "$produced" | sort -u))
-  if [ -n "$stale" ]; then
-    while IFS= read -r context; do
-      drift+=("required check not produced on the default branch: $context")
-    done <<< "$stale"
+             |.parameters.required_status_checks[]?.context]|.[]'); then
+    drift+=("could not read the required checks")
+    return 0
   fi
+  [ -z "$required" ] && return 0
+  branch=$(gh api "repos/$ORG/$repo" -q .default_branch) || { drift+=("could not read the default branch"); return 0; }
+  # a required context can be a check run or a commit status; both must be consulted
+  if ! produced=$( { gh api --paginate "repos/$ORG/$repo/commits/$branch/check-runs" -q '.check_runs[]?.name'
+                     gh api --paginate "repos/$ORG/$repo/commits/$branch/status"     -q '.statuses[]?.context'; } ); then
+    drift+=("could not read the checks produced on $branch")
+    return 0
+  fi
+  stale=$(comm -23 <(printf '%s\n' "$required" | sort -u) <(printf '%s\n' "$produced" | sort -u))
+  while IFS= read -r context; do
+    [ -n "$context" ] || continue
+    drift+=("required check not produced on the latest $branch commit: $context")
+  done <<< "$stale"
 }
 
 ruleset_payload() {
