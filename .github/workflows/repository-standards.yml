@@ -138,7 +138,10 @@ jobs:
                       need = needs(load(callee))
                   else:
                       continue
-                  grant = declared(job) or top or INHERITED
+                  # an explicit `permissions: {}` grants nothing and must not fall through
+                  grant = declared(job)
+                  if grant is None:
+                      grant = top if top is not None else INHERITED
                   if "__all__" in grant:
                       short = [f"{k}: {v}" for k, v in sorted(need.items())
                                if RANK[str(v)] > RANK[grant["__all__"]]]

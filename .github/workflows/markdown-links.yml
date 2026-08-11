@@ -58,7 +58,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
-          private=$(gh api "repos/$REPO" --jq '.private' 2>/dev/null || echo false)
+          if ! private=$(gh api "repos/$REPO" --jq '.private'); then
+            echo "::error::could not read the visibility of $REPO"
+            exit 1
+          fi
           if [ "$private" != "true" ]; then
             echo "Public repository; every self-reference is reachable."
             exit 0

@@ -356,11 +356,3 @@ jobs:
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           script: bundle exec fastlane connectedCheck
-      - name: Upload Instrumented Test Coverage
-        uses: codecov/codecov-action@v7
-        with:
-          files: '**/build/reports/coverage/androidTest/debug/connected/index.html'
-          flags: uitests
-          name: codecov-coverage
-          fail_ci_if_error: false
-          token: ${{ secrets.CODECOV_TOKEN }}

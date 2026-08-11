@@ -142,7 +142,7 @@ jobs:
           if [ -z "$version" ]; then
             declared=""
             if [ -n "$VERSION_PROPERTY" ] && [ -f gradle.properties ]; then
-              declared="$(sed -n "s/^${VERSION_PROPERTY}=//p" gradle.properties)"
+              declared="$(awk -F= -v key="$VERSION_PROPERTY" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' gradle.properties)"
               if [ -n "$declared" ] && ! echo "$declared" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
                 echo "::error::${VERSION_PROPERTY} must use semantic versioning"
                 exit 1
@@ -299,7 +299,7 @@ jobs:
             echo "::error::gradle.properties not found"
             exit 1
           fi
-          current="$(sed -n "s/^${VERSION_PROPERTY}=//p" gradle.properties)"
+          current="$(awk -F= -v key="$VERSION_PROPERTY" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' gradle.properties)"
           if [ "$current" = "$VERSION" ]; then
             echo "${VERSION_PROPERTY} already records $VERSION"
             exit 0
@@ -308,8 +308,9 @@ jobs:
             echo "::error::gradle.properties does not declare ${VERSION_PROPERTY}"
             exit 1
           fi
-          sed -i.bak "s/^${VERSION_PROPERTY}=.*/${VERSION_PROPERTY}=${VERSION}/" gradle.properties
-          rm -f gradle.properties.bak
+          awk -F= -v key="$VERSION_PROPERTY" -v value="$VERSION" \
+            '$1 == key {print key "=" value; next} {print}' gradle.properties > gradle.properties.new
+          mv gradle.properties.new gradle.properties
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add gradle.properties

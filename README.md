@@ -644,6 +644,10 @@ jobs:
 The repository owns its Fastlane lanes. `test` is required; `screenshotTests` and `connectedCheck`
 are optional and enable their jobs when present.
 
+Coverage is uploaded from the JaCoCo XML the unit test run produces. Instrumented coverage is not
+uploaded: collecting it needs `enableAndroidTestCoverage` and connected execution data wired into the
+JaCoCo task, which no project does today.
+
 Documentation deployment is deliberately not part of this workflow. A job that pushes to `gh-pages`
 needs `contents: write`, which a pull request caller should not grant — keep it in a separate
 workflow triggered on `push` to `main`.
