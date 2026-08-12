@@ -594,11 +594,10 @@ be passed.
     needs: android
     uses: SchmiedmayerLab/.github/.github/workflows/android-google-play.yml@v0.5
     permissions:
-      contents: write
+      contents: read
     secrets: inherit
     with:
       environment: internal
-      recordversion: true
 ```
 
 ##### Android Google Play Bootstrap
