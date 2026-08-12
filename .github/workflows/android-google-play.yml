@@ -257,7 +257,8 @@ jobs:
       - name: Determine Swift Cache Key
         if: inputs.swiftversion != ''
         id: swiftcache
-        run: echo "submodules=$(git submodule status --recursive | sha256sum | cut -c1-16)" >> "$GITHUB_OUTPUT"
+        shell: bash
+        run: echo "submodules=$(git submodule status --recursive | git hash-object --stdin | cut -c1-16)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Swift Build State
         if: inputs.swiftversion != ''
