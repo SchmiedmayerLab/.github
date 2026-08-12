@@ -436,21 +436,34 @@ jobs:
                 export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/google-application-credentials.json"
                 echo "Stored the Google application credentials at $GOOGLE_APPLICATION_CREDENTIALS"
 
+                # emulators:exec runs its argument through a second shell, so the lane stays quoted to keep
+                # the caller's value out of that shell's syntax. Arguments cannot survive that safely.
+                case "$FASTLANE_LANE" in
+                    *[[:space:]]*)
+                        echo "::error::fastlanelane takes no arguments while setupfirebaseemulator is enabled"
+                        exit 1
+                        ;;
+                esac
+
                 if [ -n "$FIREBASE_EMULATOR_IMPORT" ]; then
                     echo "Importing firebase emulator data from $FIREBASE_EMULATOR_IMPORT"
                     firebase emulators:exec -c "$FIREBASE_JSON_PATH" \
                       --import="$FIREBASE_EMULATOR_IMPORT" \
-                      'fastlane $FASTLANE_LANE'
+                      'fastlane "$FASTLANE_LANE"'
                 else
-                    firebase emulators:exec -c "$FIREBASE_JSON_PATH" 'fastlane $FASTLANE_LANE'
+                    firebase emulators:exec -c "$FIREBASE_JSON_PATH" 'fastlane "$FASTLANE_LANE"'
                 fi
             else
                 # The lane carries its own arguments, and values with spaces arrive quoted,
                 # so split the string the way a shell would instead of passing it as one word.
+                if ! lane_arg_lines="$(xargs -n1 printf '%s\n' <<< "$FASTLANE_LANE")" || [ -z "$lane_arg_lines" ]; then
+                    echo "::error::could not parse fastlanelane: $FASTLANE_LANE"
+                    exit 1
+                fi
                 lane_args=()
                 while IFS= read -r lane_arg; do
                     lane_args+=("$lane_arg")
-                done < <(xargs -n1 printf '%s\n' <<< "$FASTLANE_LANE")
+                done <<< "$lane_arg_lines"
                 fastlane "${lane_args[@]}"
             fi
       - name: Perform CodeQL Analysis
