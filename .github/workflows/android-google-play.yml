@@ -41,8 +41,10 @@ on:
         default: 'app.versionName'
       recordversion:
         description: |
-          Write the published version back to the gradle.properties key and commit it, so the
-          declared version never trails what is on the store. Needs contents: write.
+          Deprecated and ignored, removed in v0.6. The published version comes from the release
+          tags, which the `versionproperty` value only raises a floor under, so writing it back
+          changed nothing. The write-back also could not land on a default branch that takes
+          changes through a pull request.
         required: false
         type: boolean
         default: false
@@ -297,46 +299,3 @@ jobs:
           environment:"$TRACK"
           applicationid:"$APPLICATION_ID"
           versionname:"$VERSION_NAME"
-
-  record_version:
-    name: Record the Published Version
-    if: inputs.recordversion && inputs.versionproperty != ''
-    needs:
-      - configuration
-      - google_play
-    runs-on: ${{ fromJson(inputs.runsonlabels) }}
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.repository.default_branch }}
-
-      - name: Write the Version Back to gradle.properties
-        env:
-          VERSION_PROPERTY: ${{ inputs.versionproperty }}
-          VERSION: ${{ needs.configuration.outputs.version }}
-        run: |
-          if [ ! -f gradle.properties ]; then
-            echo "::error::gradle.properties not found"
-            exit 1
-          fi
-          current="$(awk -F= -v key="$VERSION_PROPERTY" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' gradle.properties)"
-          if [ "$current" = "$VERSION" ]; then
-            echo "${VERSION_PROPERTY} already records $VERSION"
-            exit 0
-          fi
-          if [ -z "$current" ]; then
-            echo "::error::gradle.properties does not declare ${VERSION_PROPERTY}"
-            exit 1
-          fi
-          awk -F= -v key="$VERSION_PROPERTY" -v value="$VERSION" \
-            '$1 == key {print key "=" value; next} {print}' gradle.properties > gradle.properties.new
-          mv gradle.properties.new gradle.properties
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add gradle.properties
-          git commit -m "Record the Published Version ${VERSION}"
-          git push
-          echo "${VERSION_PROPERTY} updated from $current to $VERSION"
