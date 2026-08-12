@@ -67,6 +67,13 @@ on:
         required: false
         type: string
         default: ''
+      swiftcachepaths:
+        description: |
+          Extra paths cached alongside the SwiftPM dependency cache when a toolchain is
+          installed, e.g. Gradle-managed Swift build scratches.
+        required: false
+        type: string
+        default: ''
       keystorepaths:
         description: |
           Newline-separated destinations for the decoded upload keystore.
@@ -266,7 +273,7 @@ jobs:
         with:
           path: |
             ~/.cache/org.swift.swiftpm
-            **/build/studyBundle*
+            ${{ inputs.swiftcachepaths }}
           key: swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-${{ steps.swiftcache.outputs.submodules }}
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-

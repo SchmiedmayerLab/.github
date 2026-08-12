@@ -78,6 +78,13 @@ on:
         required: false
         type: string
         default: ''
+      swiftcachepaths:
+        description: |
+          Extra paths cached alongside the SwiftPM dependency cache when a toolchain is
+          installed, e.g. Gradle-managed Swift build scratches.
+        required: false
+        type: string
+        default: ''
     secrets:
       CODECOV_TOKEN:
         description: |
@@ -264,7 +271,7 @@ jobs:
         with:
           path: |
             ~/.cache/org.swift.swiftpm
-            **/build/studyBundle*
+            ${{ inputs.swiftcachepaths }}
           key: swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-${{ steps.swiftcache.outputs.submodules }}
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-
@@ -341,7 +348,7 @@ jobs:
         with:
           path: |
             ~/.cache/org.swift.swiftpm
-            **/build/studyBundle*
+            ${{ inputs.swiftcachepaths }}
           key: swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-${{ steps.swiftcache.outputs.submodules }}
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-
@@ -404,7 +411,7 @@ jobs:
         with:
           path: |
             ~/.cache/org.swift.swiftpm
-            **/build/studyBundle*
+            ${{ inputs.swiftcachepaths }}
           key: swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-${{ steps.swiftcache.outputs.submodules }}
           restore-keys: |
             swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-
