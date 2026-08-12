@@ -54,6 +54,26 @@ on:
         required: false
         type: string
         default: ''
+      submodules:
+        description: |
+          Submodules to check out for the build: false, true, or recursive.
+        required: false
+        type: string
+        default: 'false'
+      swiftversion:
+        description: |
+          Swift toolchain version installed before the Gradle build, e.g. latest or 6.1.
+          Skipped when empty.
+        required: false
+        type: string
+        default: ''
+      swiftcachepaths:
+        description: |
+          Extra paths cached alongside the SwiftPM dependency cache when a toolchain is
+          installed, e.g. Gradle-managed Swift build scratches.
+        required: false
+        type: string
+        default: ''
       keystorepaths:
         description: |
           Newline-separated destinations for the decoded upload keystore.
@@ -220,6 +240,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           persist-credentials: false
+          submodules: ${{ inputs.submodules }}
 
       - name: Set Up JDK ${{ needs.configuration.outputs.java }}
         uses: actions/setup-java@v5
@@ -233,6 +254,29 @@ jobs:
         with:
           ruby-version: ${{ needs.configuration.outputs.ruby }}
           bundler-cache: true
+
+      - name: Set Up Swift
+        if: inputs.swiftversion != ''
+        uses: SwiftyLab/setup-swift@v1
+        with:
+          swift-version: ${{ inputs.swiftversion }}
+
+      - name: Determine Swift Cache Key
+        if: inputs.swiftversion != ''
+        id: swiftcache
+        shell: bash
+        run: echo "submodules=$(git submodule status --recursive | git hash-object --stdin | cut -c1-16)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Swift Build State
+        if: inputs.swiftversion != ''
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/org.swift.swiftpm
+            ${{ inputs.swiftcachepaths }}
+          key: swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-${{ steps.swiftcache.outputs.submodules }}
+          restore-keys: |
+            swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-
 
       - name: Write the Upload Keystore
         env:
