@@ -371,15 +371,17 @@ jobs:
             # package document before publishing, so for a package published for the first time the
             # registry caches that 404 and keeps serving it long after the publication succeeded.
             ENCODED_NAME="$(node --input-type=module -e 'console.log(encodeURIComponent(process.argv[1]))' "$PACKAGE_NAME")"
-            for ATTEMPT in {1..10}; do
-              if curl -fsS -o /dev/null "https://registry.npmjs.org/$ENCODED_NAME/$PACKAGE_VERSION"; then
+            DEADLINE="$(($(date +%s) + 300))"
+            while true; do
+              if curl -fsS --connect-timeout 10 --max-time 30 -o /dev/null \
+                "https://registry.npmjs.org/$ENCODED_NAME/$PACKAGE_VERSION"; then
                 echo "Verified $PACKAGE_NAME@$PACKAGE_VERSION."
                 break
               fi
-              if [ "$ATTEMPT" -eq 10 ]; then
+              if [ "$(date +%s)" -ge "$DEADLINE" ]; then
                 echo "Unable to verify $PACKAGE_NAME@$PACKAGE_VERSION on npm."
                 exit 1
               fi
-              sleep "$((ATTEMPT * 5))"
+              sleep 10
             done
           done
