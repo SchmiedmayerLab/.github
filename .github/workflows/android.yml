@@ -188,7 +188,7 @@ jobs:
           distribution: 'temurin'
           java-version: ${{ needs.detect.outputs.java }}
           cache: gradle
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@v6
       - name: Run Detekt
         run: ./gradlew detekt --no-daemon
       - name: Upload Detekt Reports
@@ -216,7 +216,7 @@ jobs:
           distribution: 'temurin'
           java-version: ${{ needs.detect.outputs.java }}
           cache: gradle
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@v6
       - name: Build the Documentation
         env:
           DOKKA_TASK: ${{ needs.detect.outputs.dokkatask }}
@@ -277,7 +277,7 @@ jobs:
             swiftpm-${{ runner.os }}-${{ inputs.swiftversion }}-
       - name: Initialize CodeQL
         if: inputs.codeql
-        uses: github/codeql-action/init@v4.37.4
+        uses: github/codeql-action/init@v4
         with:
           languages: java-kotlin
           build-mode: manual
@@ -297,7 +297,7 @@ jobs:
         run: ./gradlew --stop
       - name: Analyze with CodeQL
         if: inputs.codeql
-        uses: github/codeql-action/analyze@v4.37.4
+        uses: github/codeql-action/analyze@v4
         with:
           category: "/language:java-kotlin"
       - name: Upload Unit Test Coverage
@@ -420,7 +420,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - uses: gradle/actions/setup-gradle@v6.3.0
+      - uses: gradle/actions/setup-gradle@v6
       - name: Restore AVD Cache
         uses: actions/cache@v6
         id: avd-cache
