@@ -54,7 +54,7 @@ jobs:
         run: npm run lint:ci
       - name: Annotate code linting results
         if: env.is_fork == 'false'
-        uses: ataylorme/eslint-annotate-action@3.0.0
+        uses: ataylorme/eslint-annotate-action@v4
         with:
           only-pr-files: false
           fail-on-warning: true
