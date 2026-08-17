@@ -10,6 +10,14 @@ name: Repository Standards
 
 on:
   workflow_call:
+    inputs:
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+          Forwarded to every check this workflow runs.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
 
 permissions:
   contents: read
@@ -22,18 +30,24 @@ jobs:
   reuse:
     name: Licensing
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
+    with:
+      runs_on_labels: ${{ inputs.runs_on_labels }}
 
   links:
     name: Docs
     uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
+    with:
+      runs_on_labels: ${{ inputs.runs_on_labels }}
 
   actions:
     name: Actions
     uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.5
+    with:
+      runs_on_labels: ${{ inputs.runs_on_labels }}
 
   surface:
     name: Surface
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
     env:
       GH_TOKEN: ${{ github.token }}
       REPO: ${{ github.repository }}

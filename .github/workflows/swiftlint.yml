@@ -17,6 +17,12 @@ on:
         type: string
         default: latest
         required: false
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
       path:
         description: |
           The path where the project is located. Defaults to $GITHUB_WORKSPACE.
@@ -30,7 +36,7 @@ permissions:
 jobs:
   swiftlint:
     name: Run SwiftLint
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
     defaults:
       run:
         working-directory: ${{ inputs.path }}
