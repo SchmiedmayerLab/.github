@@ -10,6 +10,13 @@ name: REUSE Compliance
 
 on:
   workflow_call:
+    inputs:
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+        required: false
+        type: string
+        default: '["ubuntu-latest"]'
 
 permissions:
   contents: read
@@ -17,7 +24,7 @@ permissions:
 jobs:
   reuse:
     name: REUSE Compliance
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
     steps:
       - uses: actions/checkout@v7
       - name: REUSE Compliance
