@@ -30,20 +30,14 @@ jobs:
   reuse:
     name: Licensing
     uses: SchmiedmayerLab/.github/.github/workflows/reuse.yml@v0.5
-    with:
-      runs_on_labels: ${{ inputs.runs_on_labels }}
 
   links:
     name: Docs
     uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
-    with:
-      runs_on_labels: ${{ inputs.runs_on_labels }}
 
   actions:
     name: Actions
     uses: SchmiedmayerLab/.github/.github/workflows/actionlint.yml@v0.5
-    with:
-      runs_on_labels: ${{ inputs.runs_on_labels }}
 
   surface:
     name: Surface
