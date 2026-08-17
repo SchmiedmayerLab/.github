@@ -64,12 +64,20 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           path: ${{ runner.temp }}/coverage-artifacts
-      - name: Install lcov
-        if: ${{ inputs.coveragereports_lcov != '' }}
+      - name: Install coverage dependencies
+        env:
+          COVERAGE_REPORTS_LCOV: ${{ inputs.coveragereports_lcov }}
         run: |
-          if ! command -v lcov &> /dev/null; then
-            echo "Installing lcov..."
-            brew install lcov
+          dependencies=()
+          if [ -n "$COVERAGE_REPORTS_LCOV" ] && ! command -v lcov > /dev/null 2>&1; then
+            dependencies+=(lcov)
+          fi
+          if ! command -v gpg > /dev/null 2>&1; then
+            dependencies+=(gnupg)
+          fi
+          if [ "${#dependencies[@]}" -gt 0 ]; then
+            echo "Installing coverage dependencies: ${dependencies[*]}"
+            brew install "${dependencies[@]}"
           fi
       - name: Merge lcov coverage reports
         if: ${{ inputs.coveragereports_lcov != '' && inputs.coveragereports == '' }}
