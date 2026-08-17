@@ -23,7 +23,7 @@ on:
           The Xcode version used to merge the coverage reports.
         required: false
         type: string
-        default: '26.0.1'
+        default: 'latest-stable'
       coveragereports:
         description: |
           A string containing all names of the .xcresult files that are downloaded from the artifacts of previous jobs.
