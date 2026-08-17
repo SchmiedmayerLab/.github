@@ -11,6 +11,13 @@ name: Merge and Upload Coverage
 on:
   workflow_call:
     inputs:
+      runs_on_labels:
+        description: |
+          JSON-based collection of labels indicating which type of GitHub runner should be chosen.
+          Merging xcresult bundles needs macOS.
+        required: false
+        type: string
+        default: '["macos-26"]'
       coveragereports:
         description: |
           A string containing all names of the .xcresult files that are downloaded from the artifacts of previous jobs.
@@ -37,7 +44,7 @@ permissions:
 jobs:
   create-and-upload-coverage-report:
     name: Merge and Upload Coverage
-    runs-on: macos-26
+    runs-on: ${{ fromJson(inputs.runs_on_labels) }}
     steps:
       - uses: actions/checkout@v7
       - uses: maxim-lobanov/setup-xcode@v1
