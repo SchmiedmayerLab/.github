@@ -116,7 +116,7 @@ jobs:
           key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
       - name: Set up Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: 'microsoft'
           java-version: '21'
