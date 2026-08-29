@@ -121,7 +121,7 @@ jobs:
           echo "JDK $java · Ruby $ruby"
 
       - name: Set Up JDK ${{ steps.toolchain.outputs.java }}
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: ${{ steps.toolchain.outputs.java }}
