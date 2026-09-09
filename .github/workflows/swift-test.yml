@@ -103,6 +103,10 @@ jobs:
       - name: Build package
         env:
           BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
+          # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
         run: |
           build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
           swift build \
@@ -110,6 +114,9 @@ jobs:
       - name: Run tests
         env:
           BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
           TEST_FLAGS: ${{ inputs.test_flags }}
         run: |
           build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"

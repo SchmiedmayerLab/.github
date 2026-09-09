@@ -200,6 +200,10 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           COMMAND: ${{ inputs.command }}
+          # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
         run: |
           bash -eo pipefail -c "$COMMAND"
       - name: Clean up keychain and provisioning profile

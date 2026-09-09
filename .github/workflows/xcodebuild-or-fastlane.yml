@@ -355,6 +355,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
       - name: Resolve dependencies (xcodebuild)
         if: ${{ inputs.scheme != '' }}
+        env:
+          # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
         run: |
             xcodebuild \
               -scheme "${{ inputs.scheme }}" \
@@ -365,6 +370,10 @@ jobs:
             || true
       - name: Build and test (xcodebuild)
         if: ${{ inputs.scheme != '' }}
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
         run: |
             if ${{ inputs.test }}; then
                 XCODECOMMAND="test"
@@ -421,6 +430,9 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
+          GIT_CONFIG_VALUE_0: https://github.com/
           GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
           SETUP_FIREBASE_EMULATOR: ${{ inputs.setupfirebaseemulator }}
           FIREBASE_JSON_PATH: ${{ inputs.firebasejsonpath }}
