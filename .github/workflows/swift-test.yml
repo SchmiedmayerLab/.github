@@ -60,9 +60,15 @@ on:
         required: false
         type: string
         default: Debug
+      build_flags:
+        description: |
+          Additional flags to pass to both `swift build` and `swift test` (e.g. --build-system native, -Xswiftc -warnings-as-errors).
+        required: false
+        type: string
+        default: ''
       test_flags:
         description: |
-          Additional flags to pass to `swift test` (e.g. --no-parallel, --filter, --skip).
+          Additional flags to pass to `swift test` only (e.g. --no-parallel, --filter, --skip).
         required: false
         type: string
         default: ''
@@ -107,19 +113,31 @@ jobs:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
+          BUILD_FLAGS: ${{ inputs.build_flags }}
         run: |
           build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
+          build_args=()
+          if [ -n "$BUILD_FLAGS" ]; then
+            read -r -a build_args <<< "$BUILD_FLAGS"
+          fi
+
           swift build \
-            --configuration "$build_configuration"
+            --configuration "$build_configuration" \
+            "${build_args[@]}"
       - name: Run tests
         env:
           BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
+          BUILD_FLAGS: ${{ inputs.build_flags }}
           TEST_FLAGS: ${{ inputs.test_flags }}
         run: |
           build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
+          build_args=()
+          if [ -n "$BUILD_FLAGS" ]; then
+            read -r -a build_args <<< "$BUILD_FLAGS"
+          fi
           test_args=()
           if [ -n "$TEST_FLAGS" ]; then
             read -r -a test_args <<< "$TEST_FLAGS"
@@ -128,6 +146,7 @@ jobs:
           swift test \
             --enable-code-coverage \
             --configuration "$build_configuration" \
+            "${build_args[@]}" \
             "${test_args[@]}"
       - name: Generate coverage report
         if: ${{ (success() || failure()) && inputs.artifact_name != '' }}
