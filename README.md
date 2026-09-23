@@ -385,6 +385,7 @@ jobs:
 
 [`swift-test.yml`](.github/workflows/swift-test.yml) runs SwiftPM tests and can upload an LCOV artifact for later coverage merging.
 Use it for Linux Swift package tests or simple SwiftPM test jobs.
+Pass `build_flags` for options both `swift build` and `swift test` need, such as `--build-system native`, and `test_flags` for options only `swift test` accepts, such as `--filter`.
 
 ```yml
 jobs:
