@@ -154,10 +154,16 @@ jobs:
           BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
         run: |
           CONFIG="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
-          COVERAGE_FILE=$(find .build/*/"$CONFIG"/codecov -name "*.profdata" -type f | head -1) && \
-          XCTEST_FILE=$(find .build/*/"$CONFIG" -name "*.xctest" -type f | head -1) && \
+          # The native build system writes .build/<triple>/<config> with one .xctest; Swift 6.4's default
+          # build system writes .build/out/Products/<Config>-<platform> with one Tests.so per test target.
+          COVERAGE_FILE=$(find .build -ipath "*/$CONFIG*/codecov/*.profdata" -type f | head -1)
+          mapfile -t TEST_BINARIES < <(find .build -ipath "*/$CONFIG*" \( -name "*.xctest" -o -name "*Tests.so" \) -type f -not -path "*/checkouts/*")
+          OBJECTS=("${TEST_BINARIES[0]}")
+          for binary in "${TEST_BINARIES[@]:1}"; do
+            OBJECTS+=(-object "$binary")
+          done
           llvm-cov export \
-            "$XCTEST_FILE" \
+            "${OBJECTS[@]}" \
             --instr-profile="$COVERAGE_FILE" \
             --format=lcov > tmp.lcov
       - name: Convert LCOV format
