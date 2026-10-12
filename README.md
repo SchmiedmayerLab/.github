@@ -162,13 +162,33 @@ jobs:
 ##### Check Markdown Links
 
 [`markdown-links.yml`](.github/workflows/markdown-links.yml) checks Markdown links with Linkspector.
-Use it for documentation-heavy repositories. The workflow needs read access to pull requests so
-Linkspector can map diagnostics to the pull request diff.
+Use it for documentation-heavy repositories. Findings appear as workflow annotations, not PR comments.
+It uses Linkspector's latest `0.5.x` release and the runner's installed Google Chrome. GitHub-hosted
+Ubuntu runners provide Chrome; custom runners must provide it with a working browser sandbox.
 
 Linkspector browses anonymously, so in a **private** repository every link back into that repository
 — badge targets, `blob/main/LICENSE.md` — answers 404 no matter what the file tree contains. The
 workflow therefore adds an ignore pattern for the repository's own URL when the repository is
 private, and leaves every other link checked.
+
+For sites that block the initial browser check, `globalping_hosts` enables a second check of
+HTTP 403 results from those exact hosts. Linkspector still checks them first; this is not an
+ignore list. The fallback uses [Globalping](https://globalping.io/) without an account or API key.
+**Measurement URLs and results are public.** Opt in only hosts whose documentation paths may be
+disclosed. HTTPS URLs with credentials, query strings, fragments, or nonstandard ports are never
+submitted. Other hosts and error codes retain their original failure behavior.
+
+The fallback asks two non-datacenter probes to GET the exact path. Two successful responses with
+verified TLS resolve the finding; two 404/410 responses fail the check. Redirects, mixed responses,
+blocked requests, API failures, and exhausted quotas remain **unverified warnings**. They do not
+block a merge and must not be interpreted as successful verification. This verifies HTTP
+reachability, not page contents or JavaScript-rendered content. The probes are community operated
+and may share a network; they do not provide independent security attestations.
+
+At most ten unique URLs are submitted per run (two probes each); repeated references share one
+result. The job summary lists outcomes and measurement links, and a seven-day artifact retains
+the original Linkspector report and processed results. Checker failures and unreadable reports
+fail the job. Leaving `globalping_hosts` empty preserves strict Linkspector results.
 
 ```yml
 jobs:
@@ -178,7 +198,20 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+    with:
+      globalping_hosts: 'www.bluetooth.com,zenodo.org'
 ```
+
+`repository-standards.yml` accepts and forwards the same optional input. Existing callers need
+an updated shared-workflow release before enabling it. Self-repository references keep the
+workflow and action at the same commit, independently of the caller's checkout.
+
+`Link Check Regressions` runs on pull requests, pushes to `main`, and weekly. It exercises the
+shared action against Bluetooth, Zenodo, a valid local document, and a deliberately missing
+document. A separate live fallback check requires both public URLs to return successful
+responses with verified TLS; unverified warnings fail this regression. Unit tests cover
+blocked probes, outages, malformed reports, and preservation of other link errors without
+depending on external services. Reports are retained for seven days; no PR comments are posted.
 
 ##### Run Periphery
 

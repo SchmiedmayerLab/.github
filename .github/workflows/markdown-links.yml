@@ -17,6 +17,13 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      globalping_hosts:
+        description: |
+          Comma-separated public documentation hosts whose HTTP 403 results may be checked by Globalping.
+          Measurement URLs and results become public. Empty disables the fallback.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -79,8 +86,6 @@ jobs:
           print(f"Private repository; ignoring {pattern}")
           PY
       - name: Linkspector
-        uses: umbrelladocs/action-linkspector@v1
+        uses: $/actions/markdown-links
         with:
-          filter_mode: nofilter
-          reporter: github-pr-annotations
-          fail_level: error
+          globalping_hosts: ${{ inputs.globalping_hosts }}
