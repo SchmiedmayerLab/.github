@@ -1,0 +1,56 @@
+# This source file is part of the Schmiedmayer Lab open-source organization
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+# SPDX-License-Identifier: MIT
+
+name: Check Markdown Links
+description: Run Linkspector once and optionally verify public HTTP 403 results through Globalping.
+inputs:
+  working_directory:
+    description: Directory containing the Markdown files and Linkspector configuration.
+    default: '.'
+  globalping_hosts:
+    description: Comma-separated public documentation hosts permitted for public Globalping measurements.
+    default: ''
+outputs:
+  evidence:
+    description: Directory containing the original and processed link reports.
+    value: ${{ steps.check.outputs.evidence }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v7
+      with:
+        node-version: 24
+        package-manager-cache: false
+    - name: Check links
+      id: check
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      env:
+        CHECK_ACTION_PATH: ${{ github.action_path }}
+        GLOBALPING_HOSTS: ${{ inputs.globalping_hosts }}
+      run: |
+        set -euo pipefail
+        tools_dir=$(mktemp -d "$RUNNER_TEMP/link-tools.XXXXXX")
+        evidence_dir=$(mktemp -d "$RUNNER_TEMP/link-evidence.XXXXXX")
+        echo "evidence=$evidence_dir" >> "$GITHUB_OUTPUT"
+        npm install --prefix "$tools_dir" --ignore-scripts --no-audit --no-fund @umbrelladocs/linkspector@0.5
+        # The system Chrome has Ubuntu's sandbox configuration; downloaded test
+        # builds can be blocked by AppArmor's user-namespace restrictions.
+        if [ -z "${PUPPETEER_EXECUTABLE_PATH:-}" ]; then
+          PUPPETEER_EXECUTABLE_PATH=$(command -v google-chrome)
+        fi
+        export PUPPETEER_EXECUTABLE_PATH
+        "$PUPPETEER_EXECUTABLE_PATH" --version
+        checker_status=0
+        "$tools_dir/node_modules/.bin/linkspector" check --json > "$evidence_dir/linkspector.json" || checker_status=$?
+        python3 "$CHECK_ACTION_PATH/check_links.py" \
+          --report "$evidence_dir/linkspector.json" --checker-exit-code "$checker_status" \
+          --hosts "$GLOBALPING_HOSTS" --output "$evidence_dir/results.json"
+    - name: Retain link results
+      if: ${{ always() && steps.check.outputs.evidence != '' }}
+      uses: actions/upload-artifact@v7
+      with:
+        name: markdown-links-${{ github.job }}
+        path: ${{ steps.check.outputs.evidence }}
+        retention-days: 7

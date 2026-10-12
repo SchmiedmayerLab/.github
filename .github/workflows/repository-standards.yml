@@ -18,6 +18,13 @@ on:
         required: false
         type: string
         default: '["ubuntu-latest"]'
+      globalping_hosts:
+        description: |
+          Comma-separated public documentation hosts permitted for the optional Globalping HTTP 403 fallback.
+          Measurement URLs and results become public. Empty disables the fallback.
+        required: false
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -35,9 +42,10 @@ jobs:
 
   links:
     name: Docs
-    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
+    uses: $/.github/workflows/markdown-links.yml
     with:
       runs_on_labels: ${{ inputs.runs_on_labels }}
+      globalping_hosts: ${{ inputs.globalping_hosts }}
 
   actions:
     name: Actions

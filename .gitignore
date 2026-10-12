@@ -11,3 +11,6 @@
 
 # editors
 .idea/
+
+# Python test and action caches
+__pycache__/

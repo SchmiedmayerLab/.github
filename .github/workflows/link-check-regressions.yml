@@ -1,0 +1,47 @@
+# This source file is part of the Schmiedmayer Lab open-source organization
+# SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
+# SPDX-License-Identifier: MIT
+
+name: Link Check Regressions
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  live-links:
+    name: Bluetooth, Zenodo, and Broken-Link Detection
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare isolated link fixtures
+        run: python3 actions/markdown-links/live_check.py prepare "$RUNNER_TEMP/link-fixture"
+      - name: Run the shared action, expecting the broken-link failure
+        id: links
+        continue-on-error: true
+        uses: $/actions/markdown-links
+        with:
+          working_directory: ${{ runner.temp }}/link-fixture
+          globalping_hosts: 'www.bluetooth.com,zenodo.org'
+      - name: Verify live results and the expected failure
+        if: ${{ !cancelled() }}
+        env:
+          LINK_EVIDENCE: ${{ steps.links.outputs.evidence }}
+          LINK_OUTCOME: ${{ steps.links.outcome }}
+        run: python3 actions/markdown-links/live_check.py verify "$LINK_EVIDENCE" --outcome "$LINK_OUTCOME"
+      - name: Retain strict live verification
+        if: ${{ always() && steps.links.outputs.evidence != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: live-link-verification
+          path: ${{ steps.links.outputs.evidence }}/live-verification.json
+          if-no-files-found: warn
+          retention-days: 7
