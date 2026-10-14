@@ -42,7 +42,7 @@ jobs:
 
   links:
     name: Docs
-    uses: $/.github/workflows/markdown-links.yml
+    uses: SchmiedmayerLab/.github/.github/workflows/markdown-links.yml@v0.5
     with:
       runs_on_labels: ${{ inputs.runs_on_labels }}
       globalping_hosts: ${{ inputs.globalping_hosts }}
