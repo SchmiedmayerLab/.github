@@ -60,7 +60,7 @@ jobs:
       - name: Parse package manifest
         id: parse
         run: |
-          DEVICE_IOS="iPhone 17 Pro"
+          DEVICE_IOS="iPhone 18 Pro"
           DEVICE_IPADOS="iPad Pro 11-inch (M5)"
           DEVICE_WATCHOS="Apple Watch Series 11 (46mm)"
           DEVICE_VISIONOS="Apple Vision Pro"
