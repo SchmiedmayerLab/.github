@@ -408,7 +408,7 @@ jobs:
       package_name: ExamplePackage
       scheme: ExamplePackage
       platform_matrix: >-
-        [{"name":"iOS","destination":"platform=iOS Simulator,name=iPhone 17 Pro"}]
+        [{"name":"iOS","destination":"platform=iOS Simulator,name=iPhone 18 Pro"}]
       ui_platform_matrix: '[]'
     secrets:
       CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

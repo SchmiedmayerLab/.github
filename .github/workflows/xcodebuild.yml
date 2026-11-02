@@ -54,10 +54,10 @@ on:
       destination:
         description: |
           The destination parameter that should be passed to xcodebuild.
-          Defaults to the iOS simulator using an iPhone 17 Pro.
+          Defaults to the iOS simulator using an iPhone 18 Pro.
         required: false
         type: string
-        default: 'platform=iOS Simulator,name=iPhone 17 Pro'
+        default: 'platform=iOS Simulator,name=iPhone 18 Pro'
       resultBundle:
         description: |
           The name of the Xcode result bundle that is passed to xcodebuild.
