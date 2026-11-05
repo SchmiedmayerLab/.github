@@ -229,7 +229,12 @@ jobs:
         run: |
           python3 - <<'PY'
           import pathlib, re, sys
-          DECLARED = re.compile(r"This source file is part of the (.+? open-source (?:project|organization))")
+          # Match physical header lines, not declarations quoted inside serialized data.
+          DECLARED = re.compile(
+              r"^[ \t]*(?:(?:#+|//+|/\*+|\*+|<!--|--|%+)[ \t]*)?"
+              r"This source file is part of the ([^\r\n]+? open-source (?:project|organization))",
+              re.MULTILINE,
+          )
           FENCE = re.compile(r"```.*?```", re.S)
           HOLDER = re.compile(r"SPDX-FileCopyrightText:\s*(?:\d{4}(?:-\d{4})?\s+)?(.+)")
           OURS = ("Schmiedmayer Lab", "Stanford University")
