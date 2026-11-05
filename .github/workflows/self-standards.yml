@@ -34,6 +34,9 @@ jobs:
       - name: Link fallback regressions
         run: python3 -m unittest discover -s actions/markdown-links -p 'test_*.py' -v
 
+      - name: Project header regressions
+        run: python3 -B -m unittest discover -s tests -p 'test_*.py' -v
+
       - name: The README matches the reusable workflows
         run: |
           python3 -c 'import yaml' 2>/dev/null || python3 -m pip install --quiet pyyaml
