@@ -42,6 +42,8 @@ def header_styles(project=PROJECT):
         "HTML single line": "<!-- " + line + " -->\n",
         "HTML block": "<!--\n\n" + line + "\n\n-->\n",
         "SQL": "-- " + line + "\n",
+        "MATLAB": "% " + line + "\n",
+        "MATLAB section": "%% " + line + "\n",
         "bare block line": line + "\n",
         "CRLF": "#\r\n# " + line + "\r\n#\r\n",
     }
@@ -121,6 +123,13 @@ class ProjectHeaderTests(unittest.TestCase):
         self.assert_fails(
             {"CITATION.cff": "# " + declaration(OTHER_PROJECT) + "\n" + HOLDER},
             "CITATION.cff", OTHER_PROJECT,
+        )
+
+    def test_mismatched_matlab_source_header_still_fails(self):
+        self.assert_fails(
+            {"analysis.m": "% " + declaration(OTHER_PROJECT) + "\n" +
+             HOLDER.replace("#", "%")},
+            "analysis.m", OTHER_PROJECT,
         )
 
     def test_readme_requires_a_real_header(self):

@@ -231,7 +231,7 @@ jobs:
           import pathlib, re, sys
           # Match physical header lines, not declarations quoted inside serialized data.
           DECLARED = re.compile(
-              r"^[ \t]*(?:(?:#+|//+|/\*+|\*+|<!--|--)[ \t]*)?"
+              r"^[ \t]*(?:(?:#+|//+|/\*+|\*+|<!--|--|%+)[ \t]*)?"
               r"This source file is part of the ([^\r\n]+? open-source (?:project|organization))",
               re.MULTILINE,
           )
