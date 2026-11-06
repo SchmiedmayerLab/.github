@@ -62,13 +62,13 @@ on:
         default: Debug
       build_flags:
         description: |
-          Additional flags to pass to both `swift build` and `swift test` (e.g. --build-system native, -Xswiftc -warnings-as-errors).
+          Additional build flags to pass to `swift test` (e.g. --build-system native, -Xswiftc -warnings-as-errors).
         required: false
         type: string
         default: ''
       test_flags:
         description: |
-          Additional flags to pass to `swift test` only (e.g. --no-parallel, --filter, --skip).
+          Additional test flags to pass to `swift test` (e.g. --no-parallel, --filter, --skip).
         required: false
         type: string
         default: ''
@@ -106,27 +106,10 @@ jobs:
         uses: SwiftyLab/setup-swift@v1
         with:
           swift-version: ${{ inputs.swift_version || 'latest' }}
-      - name: Build package
-        env:
-          BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
-          # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
-          GIT_CONFIG_COUNT: 1
-          GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
-          GIT_CONFIG_VALUE_0: https://github.com/
-          BUILD_FLAGS: ${{ inputs.build_flags }}
-        run: |
-          build_configuration="$(printf '%s' "$BUILD_CONFIGURATION" | awk '{print tolower($0)}')"
-          build_args=()
-          if [ -n "$BUILD_FLAGS" ]; then
-            read -r -a build_args <<< "$BUILD_FLAGS"
-          fi
-
-          swift build \
-            --configuration "$build_configuration" \
-            "${build_args[@]}"
       - name: Run tests
         env:
           BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
+          # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
