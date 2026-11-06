@@ -106,7 +106,7 @@ jobs:
         uses: SwiftyLab/setup-swift@v1
         with:
           swift-version: ${{ inputs.swift_version || 'latest' }}
-      # `swift test` is the only compile: a separate `swift build` uses different compiler flags, so every Swift module would compile twice.
+      # `swift test` is the only compile: a separate `swift build` uses different compiler flags, so every non-test Swift module would compile twice.
       # Release jobs therefore no longer compile without `-enable-testing`, and errors that only appear in a plain Release build go uncaught here.
       # Lukas Kollmer decided this is a worthwhile tradeoff (see #47).
       - name: Run tests
