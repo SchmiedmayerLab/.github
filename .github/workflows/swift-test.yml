@@ -113,9 +113,13 @@ jobs:
         env:
           BUILD_CONFIGURATION: ${{ inputs.build_configuration }}
           # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
-          GIT_CONFIG_COUNT: 1
+          # The empty credential.helper keeps git from saving that token to the macOS keychain: SwiftPM later looks up
+          # github.com credentials there, and the item's access prompt blocks a headless runner until the job times out.
+          GIT_CONFIG_COUNT: 2
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
+          GIT_CONFIG_KEY_1: credential.helper
+          GIT_CONFIG_VALUE_1: ''
           BUILD_FLAGS: ${{ inputs.build_flags }}
           TEST_FLAGS: ${{ inputs.test_flags }}
         run: |
