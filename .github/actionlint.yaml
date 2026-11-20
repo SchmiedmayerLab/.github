@@ -3,4 +3,4 @@ paths:
   .github/workflows/**:
     ignore:
       - 'reusable workflow call "\$/.*" at "uses" is not following the format'
-      - 'specifying action "\$/actions/markdown-links" in invalid format because ref is missing'
+      - 'specifying action "\$/actions/[^"]+" in invalid format because ref is missing'
