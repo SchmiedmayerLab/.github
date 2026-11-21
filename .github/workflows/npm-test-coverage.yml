@@ -81,7 +81,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/firebase/emulators
-          key: firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory), format('{0}/pnpm-lock.yaml', inputs.working-directory)) }}
+          key: >-
+            firebase-emulators-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(
+            format('{0}/package-lock.json', inputs.working-directory),
+            format('{0}/pnpm-lock.yaml', inputs.working-directory)) }}
       - name: Set up Java
         if: ${{ runner.environment == 'github-hosted' && inputs.setup-firebase-emulator }}
         uses: actions/setup-java@v6
