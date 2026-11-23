@@ -94,6 +94,7 @@ jobs:
         with:
           node_version_file: ${{ inputs.nodeVersionFile }}
           registry_url: https://registry.npmjs.org
+          # pnpm/setup still restores its lockfile verification log; pnpm re-verifies whenever the lockfile or policy changes.
           cache: false
       - name: Verify Trusted Publishing runtime support
         # pnpm projects pack with pnpm and publish the tarball with this npm CLI.

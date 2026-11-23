@@ -45,7 +45,7 @@ runs:
       with:
         node-version-file: ${{ inputs.node_version_file }}
         cache: ${{ steps.detect.outputs.package_manager == 'npm' && inputs.cache == 'true' && 'npm' || '' }}
-        cache-dependency-path: ${{ inputs.working_directory }}/package-lock.json
+        cache-dependency-path: ${{ inputs.working_directory }}/**/package-lock.json
         package-manager-cache: false
         registry-url: ${{ inputs.registry_url }}
     - name: Use the repository npm version
