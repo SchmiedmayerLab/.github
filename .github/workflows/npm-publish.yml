@@ -252,8 +252,8 @@ jobs:
             for (const field of dependencyFields) {
               for (const dependencyName of Object.keys(workspacePackage.manifest[field] ?? {})) {
                 const internalVersion = internalVersions.get(dependencyName)
-                // pnpm replaces workspace: ranges with the rewritten package versions when packing.
-                if (internalVersion && !workspacePackage.manifest[field][dependencyName].startsWith('workspace:')) {
+                // pnpm fills in workspace:*, workspace:^ and workspace:~ when packing but keeps explicit workspace: ranges as written.
+                if (internalVersion && !/^workspace:[*^~]$/.test(workspacePackage.manifest[field][dependencyName])) {
                   workspacePackage.manifest[field][dependencyName] = internalVersion
                 }
               }
