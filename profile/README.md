@@ -12,16 +12,18 @@ SPDX-License-Identifier: MIT
 
 **AI Agents for Patient-Centered Care, Prevention, and Biomedical Research.**
 
-We develop computational methods for multimodal AI agents that retrieve and interpret evidence from wearable signals, electronic health records, and patient-reported experiences.
+We advance computational methods for multimodal AI and agentic systems that connect wearable signals, health records, and patient experiences. With a focus on cardiometabolic health, we study how agents retrieve evidence, maintain context, and act; this work ranges from supporting patients between visits to testing scientific hypotheses through reproducible biomedical analyses.
 
-Visit our [website](https://schmiedmayerlab.stanford.edu/), explore our [research and publications](https://schmiedmayerlab.stanford.edu/research/), and meet the [team](https://schmiedmayerlab.stanford.edu/people/).
+[Explore the research](https://schmiedmayerlab.stanford.edu/research/), meet the [team](https://schmiedmayerlab.stanford.edu/people/), or visit our [lab website](https://schmiedmayerlab.stanford.edu/).
 
 ## Open-source projects
 
-- **AI agents:** [Heartwood](https://github.com/SchmiedmayerLab/heartwood) supports researcher-supervised biomedical analyses. [Plainly](https://github.com/SchmiedmayerLab/Plainly-iOS) supports patient-facing AI.
-- **Multimodal methods:** [OpenTSLM](https://github.com/OpenTSLM/OpenTSLM), [TimeCAP](https://github.com/SchmiedmayerLab/TimeCAP), [PocketTSLM](https://github.com/SchmiedmayerLab/PocketTSLM), and [OpenTSLMMLX](https://github.com/SchmiedmayerLab/OpenTSLMMLX) connect time-series data with language models.
-- **Digital-health infrastructure:** [Grove](https://github.com/SchmiedmayerLab/Grove) provides modular application components. [Trove](https://github.com/SchmiedmayerLab/Trove) supports study configuration and management.
-- **Studies and interventions:** [My Heart Counts](https://github.com/SchmiedmayerLab/MyHeartCounts-iOS), [ENGAGE-HF](https://github.com/SchmiedmayerLab/ENGAGE-HF-iOS), and the [one sec Stanford study](https://github.com/SchmiedmayerLab/OneSecStanfordStudy) examine cardiovascular health, patient support, and digital wellbeing.
+- **Multimodal Computational Methods:** [OpenTSLM](https://github.com/OpenTSLM/OpenTSLM) lets models reason over time series and text. [TimeNet](https://docs.timenet.ai/) organizes datasets, [TimeCap](https://github.com/SchmiedmayerLab/TimeCAP) captions signals, and [PocketTSLM](https://github.com/SchmiedmayerLab/PocketTSLM) runs these models on a phone. See also the [OpenTSLM GitHub organization](https://github.com/OpenTSLM).
+- **Learning and Evaluation from Patient Data:** [My Heart Counts](https://github.com/SchmiedmayerLab/MyHeartCounts-iOS) studies cardiovascular health, and [ENGAGE-HF](https://github.com/SchmiedmayerLab/ENGAGE-HF-iOS) focuses on heart failure care. The [one sec Stanford study](https://github.com/SchmiedmayerLab/OneSecStanfordStudy) tests whether pausing before opening social apps can reduce problematic smartphone use.
+- **Patient-Centered Agentic Systems:** [Plainly](https://github.com/SchmiedmayerLab/Plainly-iOS) helps patients ask about their health records. [Heartwood](https://github.com/SchmiedmayerLab/heartwood) is our agentic harness for biomedical research.
+- **Shared Research Infrastructure:** [Grove](https://github.com/SchmiedmayerLab/Grove) provides health app components, [Trove](https://github.com/SchmiedmayerLab/Trove) supports study management, and we use our [Paper Template](https://github.com/SchmiedmayerLab/PaperTemplate) to write manuscripts.
+
+Explore the [full lab project directory](https://schmiedmayerlab.stanford.edu/resources/).
 
 Browse [all repositories](https://github.com/orgs/SchmiedmayerLab/repositories), join our [discussions](https://github.com/orgs/SchmiedmayerLab/discussions), or read the [contributing guidelines](https://github.com/SchmiedmayerLab/.github/blob/main/CONTRIBUTING.md).
 
