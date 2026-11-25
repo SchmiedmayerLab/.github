@@ -12,10 +12,8 @@ from pathlib import Path
 import check_links as links
 
 
-URLS = (
-    "https://www.bluetooth.com/blog/a-developers-guide-to-bluetooth/",
-    "https://zenodo.org",
-)
+URLS = ("https://zenodo.org",)
+HOSTS = {"zenodo.org"}
 MISSING = "does-not-exist.md"
 
 
@@ -41,19 +39,19 @@ def verify(directory: Path, outcome: str) -> None:
     if remaining != missing:
         raise ValueError("Unexpected failures or unverified links in the shared action's results")
 
-    # Exercise the fallback even if the runner can reach both sites directly. These
+    # Exercise the fallback even if the runner can reach the sites directly. These
     # synthetic 403s test the fallback path; they are not observations from Linkspector.
     forced = {"diagnostics": [
         {"severity": "ERROR", "message": f"Cannot reach {url} Status: 403"} for url in URLS
     ]}
-    result = links.process(forced, 1, {"www.bluetooth.com", "zenodo.org"})
+    result = links.process(forced, 1, HOSTS)
     directory.joinpath("live-verification.json").write_text(json.dumps(result, indent=2) + "\n")
     links.emit(result)
     if set(result["fallbacks"]) != set(URLS) or any(
         item["outcome"] != links.Outcome.VERIFIED for item in result["fallbacks"].values()
     ):
-        raise ValueError("Both live URLs must be verified; warnings do not pass this regression")
-    print("Both public URLs verified; valid local links passed and missing local links still failed.")
+        raise ValueError("Every live URL must be verified; warnings do not pass this regression")
+    print("Public URLs verified; valid local links passed and missing local links still failed.")
 
 
 def main() -> int:

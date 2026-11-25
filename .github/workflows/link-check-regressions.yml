@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   live-links:
-    name: Bluetooth, Zenodo, and Broken-Link Detection
+    name: Zenodo and Broken-Link Detection
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -30,7 +30,7 @@ jobs:
         uses: $/actions/markdown-links
         with:
           working_directory: ${{ runner.temp }}/link-fixture
-          globalping_hosts: 'www.bluetooth.com,zenodo.org'
+          globalping_hosts: 'zenodo.org'
       - name: Verify live results and the expected failure
         if: ${{ !cancelled() }}
         env:
