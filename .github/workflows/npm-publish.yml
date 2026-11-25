@@ -65,45 +65,6 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
-      - name: Set up Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: ${{ inputs.nodeVersionFile }}
-          package-manager-cache: false
-          registry-url: https://registry.npmjs.org
-      - name: Use the repository npm version
-        run: |
-          set -euo pipefail
-          NPM_VERSION="$(node --input-type=module -e '
-            import { readFileSync } from "node:fs";
-            const { packageManager } = JSON.parse(readFileSync("package.json", "utf8"));
-            const match = /^npm@((?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*))$/.exec(packageManager ?? "");
-            if (!match) throw new Error("package.json must declare an exact npm packageManager version.");
-            console.log(match[1]);
-          ')"
-          # npm verifies the registry tarball integrity; the caller pins the exact version.
-          npm install --global --ignore-scripts "npm@$NPM_VERSION"
-          INSTALLED_NPM_VERSION="$(npm --version)"
-          if [ "$INSTALLED_NPM_VERSION" != "$NPM_VERSION" ]; then
-            echo "Expected npm $NPM_VERSION, but installed $INSTALLED_NPM_VERSION."
-            exit 1
-          fi
-      - name: Verify Trusted Publishing runtime support
-        run: |
-          node --input-type=module <<'NODE'
-          const node = process.versions.node.split('.').map(Number)
-          const { execFileSync } = await import('node:child_process')
-          const npmVersion = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim()
-          const npm = npmVersion.match(/^(\d+)\.(\d+)\.(\d+)$/)?.slice(1).map(Number)
-
-          if (node[0] < 22 || (node[0] === 22 && node[1] < 14)) {
-            throw new Error(`Node.js 22.14.0 or newer is required; found ${process.versions.node}.`)
-          }
-          if (!npm || npm[0] < 11 || (npm[0] === 11 && npm[1] < 5) ||
-              (npm[0] === 11 && npm[1] === 5 && npm[2] < 1)) {
-            throw new Error(`npm 11.5.1 or newer is required; found ${npmVersion}.`)
-          }
-          NODE
       - name: Validate release source
         if: ${{ !inputs.dryRun }}
         env:
@@ -128,8 +89,30 @@ jobs:
             echo "Release candidate $RELEASE_SHA is not part of $DEFAULT_BRANCH."
             exit 1
           fi
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up Node.js and install dependencies
+        uses: $/actions/setup-node-project
+        with:
+          node_version_file: ${{ inputs.nodeVersionFile }}
+          registry_url: https://registry.npmjs.org
+          # pnpm/setup still restores its lockfile verification log; pnpm re-verifies whenever the lockfile or policy changes.
+          cache: false
+      - name: Verify Trusted Publishing runtime support
+        # pnpm projects pack with pnpm and publish the tarball with this npm CLI.
+        run: |
+          node --input-type=module <<'NODE'
+          const node = process.versions.node.split('.').map(Number)
+          const { execFileSync } = await import('node:child_process')
+          const npmVersion = execFileSync('npm', ['--version'], { encoding: 'utf8' }).trim()
+          const npm = npmVersion.match(/^(\d+)\.(\d+)\.(\d+)$/)?.slice(1).map(Number)
+
+          if (node[0] < 22 || (node[0] === 22 && node[1] < 14)) {
+            throw new Error(`Node.js 22.14.0 or newer is required; found ${process.versions.node}.`)
+          }
+          if (!npm || npm[0] < 11 || (npm[0] === 11 && npm[1] < 5) ||
+              (npm[0] === 11 && npm[1] === 5 && npm[2] < 1)) {
+            throw new Error(`npm 11.5.1 or newer is required; found ${npmVersion}.`)
+          }
+          NODE
       - name: Plan and prepare release
         id: plan
         env:
@@ -139,8 +122,9 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import { execFileSync } from 'node:child_process'
+          import { existsSync } from 'node:fs'
           import { appendFile, readFile, writeFile } from 'node:fs/promises'
-          import { resolve } from 'node:path'
+          import { relative, resolve } from 'node:path'
 
           const semverPattern = new RegExp(
             [
@@ -164,13 +148,25 @@ jobs:
           }
 
           const rootManifest = JSON.parse(await readFile('package.json', 'utf8'))
+          const usesPnpm = process.env.PACKAGE_MANAGER === 'pnpm'
           const workspaceConfiguration =
             Array.isArray(rootManifest.workspaces) ? rootManifest.workspaces : rootManifest.workspaces?.packages
-          const locations =
-            workspaceConfiguration?.length ?
+          const workspaceLocations =
+            usesPnpm ?
+              existsSync('pnpm-workspace.yaml') ?
+                JSON.parse(
+                  execFileSync('pnpm', ['--recursive', 'list', '--json', '--depth', '-1'], {
+                    encoding: 'utf8',
+                  }),
+                )
+                  .map(({ path }) => relative(process.cwd(), path))
+                  .filter((location) => location !== '')
+              : []
+            : workspaceConfiguration?.length ?
               JSON.parse(execFileSync('npm', ['query', '.workspace', '--json'], { encoding: 'utf8' }))
                 .map(({ location }) => location)
-            : ['.']
+            : []
+          const locations = workspaceLocations.length > 0 ? workspaceLocations : ['.']
           const workspacePackages = await Promise.all(
             locations.map(async (location) => {
               const path = resolve(location, 'package.json')
@@ -256,7 +252,10 @@ jobs:
             for (const field of dependencyFields) {
               for (const dependencyName of Object.keys(workspacePackage.manifest[field] ?? {})) {
                 const internalVersion = internalVersions.get(dependencyName)
-                if (internalVersion) workspacePackage.manifest[field][dependencyName] = internalVersion
+                // pnpm fills in workspace:*, workspace:^ and workspace:~ when packing but keeps explicit workspace: ranges as written.
+                if (internalVersion && !/^workspace:[*^~]$/.test(workspacePackage.manifest[field][dependencyName])) {
+                  workspacePackage.manifest[field][dependencyName] = internalVersion
+                }
               }
             }
             await writeFile(
@@ -271,7 +270,7 @@ jobs:
             version,
             prerelease,
             'npm-tag': prerelease ? 'next' : 'latest',
-            workspaces: workspaceConfiguration?.length ? 'true' : 'false',
+            workspaces: workspaceLocations.length > 0 ? 'true' : 'false',
           }
           await appendFile(
             process.env.GITHUB_OUTPUT,
@@ -285,15 +284,18 @@ jobs:
           console.log(`- Token bootstrap: ${plan.bootstrap.join(', ') || 'none'}`)
           console.log(`- Already published: ${plan.skipped.join(', ') || 'none'}`)
           NODE
-          npm install --package-lock-only --ignore-scripts
+          # pnpm lockfiles do not record workspace package versions.
+          if [ "$PACKAGE_MANAGER" = npm ]; then
+            npm install --package-lock-only --ignore-scripts
+          fi
       - name: Run repository release preparation
-        run: npm run release:prepare --if-present
+        run: '"$PACKAGE_MANAGER" run --if-present release:prepare'
       - name: Build packages
-        run: npm run build --if-present
+        run: '"$PACKAGE_MANAGER" run --if-present build'
       - name: Verify release package contents
         run: |
-          npm run pack:check --if-present
-          npm run pack:lint --if-present
+          "$PACKAGE_MANAGER" run --if-present pack:check
+          "$PACKAGE_MANAGER" run --if-present pack:lint
       - name: Publish existing packages with Trusted Publishing
         if: ${{ !inputs.dryRun && steps.plan.outputs.oidc != '[]' }}
         env:
@@ -305,7 +307,21 @@ jobs:
           PACKAGE_LINES="$(node --input-type=module -e 'for (const name of JSON.parse(process.env.PACKAGES)) console.log(name)')"
           mapfile -t PACKAGE_NAMES <<< "$PACKAGE_LINES"
           for PACKAGE_NAME in "${PACKAGE_NAMES[@]}"; do
-            if [ "$WORKSPACES" = "true" ]; then
+            if [ "$PACKAGE_MANAGER" = pnpm ]; then
+              # pnpm packs workspace: ranges as release versions; npm publishes with OIDC and provenance.
+              PACK_DIRECTORY="$(mktemp -d)"
+              if [ "$WORKSPACES" = "true" ]; then
+                pnpm --filter "$PACKAGE_NAME" pack --pack-destination "$PACK_DIRECTORY"
+              else
+                pnpm pack --pack-destination "$PACK_DIRECTORY"
+              fi
+              TARBALLS=("$PACK_DIRECTORY"/*.tgz)
+              if [ "${#TARBALLS[@]}" -ne 1 ] || [ ! -f "${TARBALLS[0]}" ]; then
+                echo "Expected one tarball for $PACKAGE_NAME in $PACK_DIRECTORY."
+                exit 1
+              fi
+              npm publish "${TARBALLS[0]}" --provenance --access public --tag "$NPM_TAG"
+            elif [ "$WORKSPACES" = "true" ]; then
               npm publish --workspace "$PACKAGE_NAME" --provenance --access public --tag "$NPM_TAG"
             else
               npm publish --provenance --access public --tag "$NPM_TAG"
@@ -327,7 +343,21 @@ jobs:
           PACKAGE_LINES="$(node --input-type=module -e 'for (const name of JSON.parse(process.env.PACKAGES)) console.log(name)')"
           mapfile -t PACKAGE_NAMES <<< "$PACKAGE_LINES"
           for PACKAGE_NAME in "${PACKAGE_NAMES[@]}"; do
-            if [ "$WORKSPACES" = "true" ]; then
+            if [ "$PACKAGE_MANAGER" = pnpm ]; then
+              # pnpm packs workspace: ranges as release versions; npm publishes with OIDC and provenance.
+              PACK_DIRECTORY="$(mktemp -d)"
+              if [ "$WORKSPACES" = "true" ]; then
+                pnpm --filter "$PACKAGE_NAME" pack --pack-destination "$PACK_DIRECTORY"
+              else
+                pnpm pack --pack-destination "$PACK_DIRECTORY"
+              fi
+              TARBALLS=("$PACK_DIRECTORY"/*.tgz)
+              if [ "${#TARBALLS[@]}" -ne 1 ] || [ ! -f "${TARBALLS[0]}" ]; then
+                echo "Expected one tarball for $PACKAGE_NAME in $PACK_DIRECTORY."
+                exit 1
+              fi
+              npm publish "${TARBALLS[0]}" --provenance --access public --tag "$NPM_TAG"
+            elif [ "$WORKSPACES" = "true" ]; then
               npm publish --workspace "$PACKAGE_NAME" --provenance --access public --tag "$NPM_TAG"
             else
               npm publish --provenance --access public --tag "$NPM_TAG"
