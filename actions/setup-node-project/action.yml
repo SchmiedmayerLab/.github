@@ -48,6 +48,26 @@ runs:
         cache-dependency-path: ${{ inputs.working_directory }}/**/package-lock.json
         package-manager-cache: false
         registry-url: ${{ inputs.registry_url }}
+    - name: Check the pnpm version
+      if: ${{ steps.detect.outputs.package_manager == 'pnpm' }}
+      shell: bash
+      working-directory: ${{ inputs.working_directory }}
+      run: |
+        set -euo pipefail
+        PNPM_MAJOR="$(node --input-type=module -e '
+          import { readFileSync } from "node:fs";
+          const { packageManager } = JSON.parse(readFileSync("package.json", "utf8"));
+          console.log(/^pnpm@(0|[1-9][0-9]*)\./.exec(packageManager ?? "")?.[1] ?? "");
+        ')"
+        if [ -z "$PNPM_MAJOR" ]; then
+          echo "::error file=package.json::pnpm projects must declare the pnpm version in packageManager, for example pnpm@12.21.0."
+          exit 1
+        fi
+        # pnpm/setup@v3 installs pnpm 11 and newer only.
+        if [ "$PNPM_MAJOR" -lt 11 ]; then
+          echo "::error file=package.json::These workflows support pnpm 11 or newer, but packageManager declares pnpm $PNPM_MAJOR."
+          exit 1
+        fi
     - name: Use the repository npm version
       if: ${{ steps.detect.outputs.package_manager == 'npm' }}
       shell: bash

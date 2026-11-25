@@ -693,7 +693,7 @@ jobs:
 
 Use [`npm-publish.yml`](.github/workflows/npm-publish.yml) for repositories that publish one package or a fixed-version npm workspace collection.
 The workflow reads a published GitHub release tag, Node.js from `.nvmrc`, and the package manager version from the `packageManager` entry in `package.json`, so release-event callers normally provide no inputs.
-A `pnpm-lock.yaml` selects pnpm; any other project uses npm, which must be pinned to an exact version.
+A `pnpm-lock.yaml` selects pnpm, which must be version 11 or newer; any other project uses npm, which must be pinned to an exact version.
 pnpm workspaces are discovered from `pnpm-workspace.yaml`; internal `workspace:` ranges stay in place and pnpm packs them as the release version.
 pnpm projects are packed with pnpm and published with the npm CLI bundled with Node.js, so OIDC Trusted Publishing and provenance work the same way for both package managers.
 It validates bare semantic versions, orders workspace packages by runtime dependencies, synchronizes internal dependency versions, skips versions already present on npm, publishes existing packages through OIDC, and verifies the registry state.
@@ -729,7 +729,7 @@ Use [`npm-pages.yml`](.github/workflows/npm-pages.yml) when an npm or pnpm proje
 By default, the script must create `deploy/index.html`; when `artifactPath` is set, it must create `<artifactPath>/index.html`.
 All routing and framework-specific build decisions stay in the caller repository.
 By default, Node.js is read from `.nvmrc` and the package manager version from the root `packageManager` entry.
-A `pnpm-lock.yaml` selects pnpm; any other project uses npm, which must be pinned to an exact version.
+A `pnpm-lock.yaml` selects pnpm, which must be version 11 or newer; any other project uses npm, which must be pinned to an exact version.
 
 ```yml
 permissions:
@@ -751,7 +751,7 @@ Existing callers can remain on their pinned Next.js workflow release until their
 
 Use [`npm-test-coverage.yml`](.github/workflows/npm-test-coverage.yml) for npm or pnpm projects that should install from their lockfile, run their `test` script, and upload coverage to Codecov.
 It reads Node.js from `.nvmrc` and the package manager version from the `packageManager` entry in the selected project's `package.json`, so the standard caller does not provide runtime versions.
-A `pnpm-lock.yaml` in the selected project runs `pnpm install --frozen-lockfile`; any other project runs `npm ci` with an exactly pinned npm version.
+A `pnpm-lock.yaml` in the selected project runs `pnpm install --frozen-lockfile` with pnpm 11 or newer; any other project runs `npm ci` with an exactly pinned npm version.
 `npmVersion` overrides only the npm version of npm projects.
 Set `coverage-files` to a comma-separated list when a repository contains non-coverage files whose names could be discovered by Codecov.
 Firebase projects can enable emulator tooling with `setup-firebase-emulator: true`; callers must install `firebase-tools` through their lockfile, which also keys the emulator cache.
