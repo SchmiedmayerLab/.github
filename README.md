@@ -183,7 +183,9 @@ verified TLS resolve the finding; two 404/410 responses fail the check. Redirect
 blocked requests, API failures, and exhausted quotas remain **unverified warnings**. They do not
 block a merge and must not be interpreted as successful verification. This verifies HTTP
 reachability, not page contents or JavaScript-rendered content. The probes are community operated
-and may share a network; they do not provide independent security attestations.
+and may share a network; they do not provide independent security attestations. Hosts that
+challenge every non-browser client, such as sites behind a Cloudflare bot challenge, block the
+probes too, so their links only ever yield unverified warnings.
 
 At most ten unique URLs are submitted per run (two probes each); repeated references share one
 result. The job summary lists outcomes and measurement links, and a seven-day artifact retains
@@ -199,7 +201,7 @@ jobs:
       contents: read
       pull-requests: read
     with:
-      globalping_hosts: 'www.bluetooth.com,zenodo.org'
+      globalping_hosts: 'zenodo.org'
 ```
 
 `repository-standards.yml` accepts and forwards the same optional input. Existing callers need
@@ -207,8 +209,8 @@ an updated shared-workflow release before enabling it. Self-repository reference
 workflow and action at the same commit, independently of the caller's checkout.
 
 `Link Check Regressions` runs on pull requests, pushes to `main`, and weekly. It exercises the
-shared action against Bluetooth, Zenodo, a valid local document, and a deliberately missing
-document. A separate live fallback check requires both public URLs to return successful
+shared action against Zenodo, a valid local document, and a deliberately missing document.
+A separate live fallback check requires the public URL to return successful
 responses with verified TLS; unverified warnings fail this regression. Unit tests cover
 blocked probes, outages, malformed reports, and preservation of other link errors without
 depending on external services. Reports are retained for seven days; no PR comments are posted.

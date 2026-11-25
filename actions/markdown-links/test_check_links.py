@@ -147,7 +147,7 @@ class FallbackTests(unittest.TestCase):
 
 
 class LiveRegressionTests(unittest.TestCase):
-    def test_fixture_contains_both_sites_and_local_controls(self):
+    def test_fixture_contains_live_sites_and_local_controls(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary) / "fixture"
             live_check.prepare(directory)
