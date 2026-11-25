@@ -48,7 +48,8 @@ runs:
         cache-dependency-path: ${{ inputs.working_directory }}/**/package-lock.json
         package-manager-cache: false
         registry-url: ${{ inputs.registry_url }}
-    - name: Check the pnpm version
+    - name: Check the pnpm version and Node.js runtime
+      id: pnpm
       if: ${{ steps.detect.outputs.package_manager == 'pnpm' }}
       shell: bash
       working-directory: ${{ inputs.working_directory }}
@@ -68,6 +69,8 @@ runs:
           echo "::error file=package.json::These workflows support pnpm 11 or newer, but packageManager declares pnpm $PNPM_MAJOR."
           exit 1
         fi
+        # pnpm/setup installs this exact Node.js version instead of any runtime in devEngines.runtime.
+        echo "node_version=$(node -p process.versions.node)" >> "$GITHUB_OUTPUT"
     - name: Use the repository npm version
       if: ${{ steps.detect.outputs.package_manager == 'npm' }}
       shell: bash
@@ -109,7 +112,7 @@ runs:
       if: ${{ steps.detect.outputs.package_manager == 'pnpm' }}
       with:
         working-directory: ${{ inputs.working_directory }}
-        # actions/setup-node already installed Node.js from node_version_file; do not install a second runtime.
-        node-version-file: false
+        # An explicit runtime keeps the Node.js version from node_version_file and skips devEngines.runtime.
+        runtime: node@${{ steps.pnpm.outputs.node_version }}
         cache: ${{ inputs.cache }}
         require-lockfile: true
