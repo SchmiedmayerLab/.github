@@ -175,13 +175,11 @@ private, and leaves every other link checked.
 
 External links that answer HTTP 408, 429, or 5xx are retried with a direct GET, with waits of 2,
 8, and 30 seconds between attempts. A longer `Retry-After` on a 429 or 503 answer extends the
-next wait for that link; a link whose `Retry-After` exceeds the remaining retry budget is not
+next wait for that link. A link whose `Retry-After` exceeds the remaining retry budget is not
 retried further. A 2xx answer resolves the finding, and 404 and other 4xx answers fail the check.
-Two answers are deliberate exceptions that become **unverified warnings**, because a direct
-request can be treated differently than a browser request: 403, which some sites send to
-non-browser clients, and a redirect that does not resolve, such as a loop. When the Linkspector
-configuration sets `followRedirects: false`, or a `followRedirects` value the checker cannot read
-as true, any redirect on retry fails the check. Links that stay unavailable also become
+Retries do not follow redirects; a link that answers with a redirect on retry becomes an
+**unverified warning**. A 403 answer is a deliberate exception that also becomes a warning,
+because some sites send it to non-browser clients. Links that stay unavailable also become
 unverified warnings, including a retry that gets no response at all, such as a DNS failure or a
 refused connection, because Linkspector's first check already received an HTTP status from the
 host. Warnings do not block a merge. Retries cover at most 25 unique URLs within about 150

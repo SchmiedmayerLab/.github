@@ -159,12 +159,12 @@ def request_url(url: str) -> str:
                                               for part in (parts.path, parts.query, parts.fragment))))
 
 
-def fetch(url: str, follow_redirects: bool) -> tuple[int | None, float | None]:
-    handlers = () if follow_redirects else (NoRedirects(),)
+def fetch(url: str) -> tuple[int | None, float | None]:
     try:
         # Markdown links can contain non-ASCII characters, which urllib cannot send as written.
         request = Request(request_url(url), headers={"User-Agent": USER_AGENT})
-        with build_opener(*handlers).open(request, timeout=RETRY_TIMEOUT) as response:
+        # Redirects are never followed, so a redirect answer is reported as its 3xx status.
+        with build_opener(NoRedirects()).open(request, timeout=RETRY_TIMEOUT) as response:
             return response.status, None
     except HTTPError as error:
         wait = (parse_retry_after(error.headers.get("Retry-After"))
@@ -175,13 +175,13 @@ def fetch(url: str, follow_redirects: bool) -> tuple[int | None, float | None]:
         return None, None
 
 
-def probe(url: str, follow_redirects: bool = True) -> tuple[int | None, float | None]:
+def probe(url: str) -> tuple[int | None, float | None]:
     """Return the final HTTP status of a GET and any Retry-After delay; no status when nothing arrived in time."""
     answer: list = []
 
     def run() -> None:
         try:
-            answer.append(fetch(url, follow_redirects))
+            answer.append(fetch(url))
         except BaseException as error:  # Re-raised below so unexpected failures still fail the job.
             answer.append(error)
 
@@ -196,7 +196,7 @@ def probe(url: str, follow_redirects: bool = True) -> tuple[int | None, float | 
     return answer[0]
 
 
-def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
+def retry(urls: list[str]) -> dict[str, Finding]:
     """Retry each URL with backoff until it answers with a non-transient status."""
     findings = {url: Finding(Outcome.UNVERIFIED, "Retry limit reached") for url in urls[MAX_RETRY_URLS:]}
     start = time.monotonic()
@@ -212,7 +212,7 @@ def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
                                     else "Retry time budget reached")
             continue
         time.sleep(max(0.0, due[url] - time.monotonic()))
-        code, wait = probe(url, follow_redirects)
+        code, wait = probe(url)
         attempts[url] += 1
         if code is None or code in (408, 429) or code >= 500:
             last[url] = "no response" if code is None else f"HTTP {code}"
@@ -227,43 +227,13 @@ def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
         del due[url]
         if 200 <= code < 300:
             findings[url] = Finding(Outcome.VERIFIED, f"HTTP {code} on retry")
-        elif code == 403 or (code < 400 and follow_redirects):
-            # Deliberate exceptions: a direct request can be blocked (403) or end in a redirect
-            # loop where the browser was not, so these warn. Every other 4xx fails the check.
+        elif code == 403 or code < 400:
+            # Deliberate exceptions: a direct request can be blocked (403) where the browser was
+            # not, and a redirect (3xx) is not followed, so these warn. Every other 4xx fails.
             findings[url] = Finding(Outcome.UNVERIFIED, f"HTTP {code} on retry")
         else:
             findings[url] = Finding(Outcome.BROKEN, f"HTTP {code} on retry")
     return {url: findings[url] for url in urls}
-
-
-YAML_COMMENT = re.compile(r"(?:^|[ \t])#.*$")
-YAML_ESCAPE = re.compile(r"\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))")
-# Linkspector validates the configuration but uses the raw value, so quoted "false" and the
-# YAML 1.1 words no and off are truthy strings and leave redirects enabled.
-FOLLOWING = re.compile(r"""[ \t]*(["']?)followRedirects\1[ \t]*:[ \t]*"""
-                       r"""(?:(?i:true|no|off)|"(?i:false)"|'(?i:false)')[ \t]*""")
-
-
-def follows_redirects(config: Path) -> bool:
-    """Read Linkspector's followRedirects setting, failing closed.
-
-    Without a configuration or key, redirects are followed. Any occurrence of the key outside a
-    comment that is not a plain truthy value counts as false, so the retry never follows a
-    redirect that Linkspector would reject.
-    """
-    try:
-        text = config.read_text(encoding="utf-8-sig")
-    except FileNotFoundError:
-        return True
-    for line in text.splitlines():
-        try:
-            line = YAML_ESCAPE.sub(lambda match: chr(int(next(filter(None, match.groups())), 16)),
-                                   YAML_COMMENT.sub("", line))
-        except ValueError:
-            return False
-        if "followRedirects" in line and not FOLLOWING.fullmatch(line):
-            return False
-    return True
 
 
 def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
@@ -281,12 +251,12 @@ def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
     return diagnostics
 
 
-def process(report: dict, exit_code: int, hosts: set[str], follow_redirects: bool = True) -> dict:
+def process(report: dict, exit_code: int, hosts: set[str]) -> dict:
     diagnostics = read_diagnostics(report, exit_code)
     transient = [(item, match[1]) for item in diagnostics if item["severity"] == "ERROR"
                  and (match := TRANSIENT.fullmatch(item["message"]))]
     urls = list(dict.fromkeys(url for _, url in transient))
-    retries = retry(urls, follow_redirects) if urls else {}
+    retries = retry(urls) if urls else {}
     for item, url in transient:
         annotate(item, url, retries[url])
     findings: dict[str, Finding] = {}
@@ -295,7 +265,7 @@ def process(report: dict, exit_code: int, hosts: set[str], follow_redirects: boo
         if item["severity"] != "ERROR" or not match:
             continue
         url = match[1]
-        # Opt-in governs disclosure AND downgrading of 403 results. Retried diagnostics no longer match.
+        # Opt-in governs disclosure and downgrading of 403 results. Retried diagnostics no longer match.
         if measurement_payload(url, hosts) is None:
             continue
         if url not in findings:
@@ -353,8 +323,7 @@ def main() -> int:
     args = parser.parse_args()
     try:
         report = json.loads(args.report.read_text())
-        result = process(report, args.checker_exit_code, allowed_hosts(args.hosts),
-                         follows_redirects(Path(".linkspector.yml")))
+        result = process(report, args.checker_exit_code, allowed_hosts(args.hosts))
         args.output.write_text(json.dumps(result, indent=2) + "\n")
         emit(result)
         return int(any(item["severity"] == "ERROR" for item in result["diagnostics"]))

@@ -6,7 +6,6 @@ import copy
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import io
 import json
-import os
 from pathlib import Path
 import sys
 import tempfile
@@ -163,11 +162,11 @@ class RetryTests(unittest.TestCase):
     def advance(self, seconds):
         self.now += seconds
 
-    def process(self, items, codes, hosts=frozenset(), follow_redirects=True):
+    def process(self, items, codes, hosts=frozenset()):
         answers = iter([] if callable(codes) else codes)
         sequences = {}
 
-        def answer(url, follow=True):
+        def answer(url):
             if callable(codes):
                 code = codes(url)
                 if isinstance(code, list):
@@ -177,7 +176,7 @@ class RetryTests(unittest.TestCase):
             return code if isinstance(code, tuple) else (code, None)
 
         with patch.object(links, "probe", side_effect=answer) as probe:
-            result = links.process({"diagnostics": items}, 1, set(hosts), follow_redirects)
+            result = links.process({"diagnostics": items}, 1, set(hosts))
         return result, probe
 
     def test_transient_statuses_are_retried_with_backoff(self):
@@ -193,7 +192,7 @@ class RetryTests(unittest.TestCase):
 
     def test_retry_outcomes(self):
         cases = [([200], "INFO"), ([404], "ERROR"), ([410], "ERROR"), ([400], "ERROR"), ([401], "ERROR"),
-                 ([403], "WARNING"), ([301], "WARNING"), ([503, 503, 503], "WARNING"),
+                 ([403], "WARNING"), ([301], "WARNING"), ([302], "WARNING"), ([308], "WARNING"), ([503, 503, 503], "WARNING"),
                  ([None, None, None], "WARNING"), ([429, 408, 502], "WARNING")]
         for codes, severity in cases:
             with self.subTest(codes=codes):
@@ -279,34 +278,6 @@ class RetryTests(unittest.TestCase):
         self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
         self.assertEqual(result["fallbacks"], {})
 
-    def test_disabled_redirects_make_a_retry_redirect_fail(self):
-        result, probe = self.process([diagnostic(code=503)], [301], follow_redirects=False)
-        self.assertEqual(probe.call_args.args, (URL, False))
-        self.assertEqual(result["diagnostics"][0]["severity"], "ERROR")
-
-    def test_follow_redirects_configuration(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            config = Path(temporary) / ".linkspector.yml"
-            self.assertTrue(links.follows_redirects(config))
-            following = ["dirs:\n  - .\n", "# followRedirects: false\n", "dirs: [.] # followRedirects: false\n",
-                         "followRedirects: true\n", "followRedirects: TRUE # strict later\n",
-                         "'followRedirects': True\n", '"followRedirects" : true\n',
-                         'followRedirects: "false"\n', "followRedirects: 'false'\n",
-                         "followRedirects: no\n", "followRedirects: OFF\n"]
-            strict = ["followRedirects: false\n", "followRedirects: false # strict\n", "followRedirects: FALSE\n",
-                      "followRedirects : false\n", "'followRedirects': false\n", '"followRedirects": false\n',
-                      "{followRedirects: false}\n", "{dirs: [.], followRedirects: true}\n",
-                      "followRedirects: !!bool false\n", 'followRedirects: !!bool "false"\n',
-                      "\ufefffollowRedirects: false\n", "followRedirects: falsey\n", "followRedirects: 0\n",
-                      "followRedirects:\n  false\n", "followRedirects: &value false\n",
-                      "strict: &value false\nfollowRedirects: *value\n", "? followRedirects\n: false\n",
-                      '"follow\\u0052edirects": false\n', '"follow\\x52edirects": false\n',
-                      "followRedirects: true\nfollowRedirects: false\n"]
-            for text, expected in [(text, True) for text in following] + [(text, False) for text in strict]:
-                with self.subTest(text=text):
-                    config.write_text(text, encoding="utf-8")
-                    self.assertEqual(links.follows_redirects(config), expected)
-
     def test_main_exit_code_follows_retry_outcomes(self):
         report = {"diagnostics": [diagnostic(code=503), diagnostic(URL + "x", 408)]}
         for code, status in [(200, 0), (404, 1)]:
@@ -315,14 +286,9 @@ class RetryTests(unittest.TestCase):
                 directory.joinpath("linkspector.json").write_text(json.dumps(report))
                 arguments = ["check_links.py", "--report", str(directory / "linkspector.json"),
                              "--checker-exit-code", "1", "--output", str(directory / "results.json")]
-                previous = os.getcwd()
-                os.chdir(directory)
-                try:
-                    with patch.object(links, "probe", return_value=(code, None)), patch.object(sys, "argv", arguments), \
-                            patch.dict(links.os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()):
-                        self.assertEqual(links.main(), status)
-                finally:
-                    os.chdir(previous)
+                with patch.object(links, "probe", return_value=(code, None)), patch.object(sys, "argv", arguments), \
+                        patch.dict(links.os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()):
+                    self.assertEqual(links.main(), status)
 
     def test_time_budget_is_bounded(self):
         with patch.object(links, "RETRY_BUDGET", 1):
@@ -429,10 +395,21 @@ class ProbeServerTests(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
 
-    def test_redirects_follow_the_configuration(self):
-        self.assertEqual(links.probe(self.base + "/redirect"), (200, None))
-        self.assertEqual(links.probe(self.base + "/redirect", False), (302, None))
-        self.assertEqual(links.probe(self.base + "/loop"), (302, None))
+    def test_redirects_are_not_followed(self):
+        for path in ("/redirect", "/loop"):
+            with self.subTest(path=path):
+                LocalServer.paths.clear()
+                self.assertEqual(links.probe(self.base + path), (302, None))
+                self.assertEqual(LocalServer.paths, [path])
+
+    def test_a_redirect_on_retry_is_a_warning(self):
+        url = self.base + "/redirect"
+        LocalServer.paths.clear()
+        with patch.object(links.time, "sleep"):
+            result = links.process({"diagnostics": [diagnostic(url, 503)]}, 1, set())
+        self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
+        self.assertEqual(result["retries"][url]["reason"], "HTTP 302 on retry")
+        self.assertNotIn("/ok", LocalServer.paths)
 
     def test_non_ascii_is_encoded(self):
         LocalServer.paths.clear()
