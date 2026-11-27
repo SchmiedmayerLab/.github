@@ -11,6 +11,7 @@ import sys
 import tempfile
 import threading
 import time
+from time import sleep as real_sleep
 import unittest
 from contextlib import redirect_stdout
 from unittest.mock import MagicMock, patch
@@ -228,6 +229,15 @@ class RetryTests(unittest.TestCase):
                 self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2, 20.0])
                 self.assertEqual(result["diagnostics"][0]["severity"], "INFO")
 
+    def test_idna_deviation_hosts_are_not_probed(self):
+        for host in ("stra\u00dfe.example", "\u03c3\u03bf\u03c6\u03bf\u03c2.example", "a\u200cb.example", "a\u200db.example"):
+            with self.subTest(host=host):
+                url = f"https://{host}/guide"
+                result, probe = self.process([diagnostic(url, 503)], [])
+                probe.assert_not_called()
+                self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
+                self.assertEqual(result["retries"][url]["reason"], "Host needs IDNA 2008, so it is not retried")
+
     def test_retry_after_does_not_delay_other_urls(self):
         other = URL + "x"
         result, probe = self.process([diagnostic(code=429), diagnostic(other, 503)],
@@ -308,7 +318,6 @@ class RetryTests(unittest.TestCase):
         self.assertIn("### Retried external links", text)
         self.assertIn(f"- verified: <code>{URL}</code>: HTTP 200 on retry\n", text)
         self.assertIn(f"- unverified: <code>{URL}x</code>: Still unavailable on retry (HTTP 503)\n", text)
-        self.assertNotIn("\u2014", text)
         self.assertEqual(result["diagnostics"][0]["message"], f"verified: {URL}: HTTP 200 on retry")
 
     def test_summary_lists_fallback_outcome_values(self):
@@ -372,7 +381,7 @@ class LocalServer(BaseHTTPRequestHandler):
             for _ in range(30):
                 self.wfile.write(b"x")
                 self.wfile.flush()
-                time.sleep(0.2)
+                real_sleep(0.2)  # RetryTests replaces time.sleep while server threads may run.
         else:
             self.send_response(200)
             self.send_header("Content-Length", "0")

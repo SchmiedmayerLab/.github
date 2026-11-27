@@ -173,20 +173,21 @@ Linkspector browses anonymously, so in a **private** repository every link back 
 workflow therefore adds an ignore pattern for the repository's own URL when the repository is
 private, and leaves every other link checked.
 
-External links that answer HTTP 408, 429, or 5xx are retried with a direct GET, with waits of 2,
-8, and 30 seconds between attempts. A longer `Retry-After` on a 429 or 503 answer extends the
-next wait for that link. A link whose `Retry-After` exceeds the remaining retry budget is not
-retried further. A 2xx answer resolves the finding, and 404 and other 4xx answers fail the check.
-Retries do not follow redirects; a link that answers with a redirect on retry becomes an
-**unverified warning**. A 403 answer is a deliberate exception that also becomes a warning,
-because some sites send it to non-browser clients. Links that stay unavailable also become
-unverified warnings, including a retry that gets no response at all, such as a DNS failure or a
-refused connection, because Linkspector's first check already received an HTTP status from the
-host. Warnings do not block a merge. Retries cover at most 25 unique URLs within about 150
-seconds per run, and links beyond these limits become unverified warnings. When Linkspector
-itself reports a local file, a DNS or connection failure, a browser timeout without an HTTP
-status, or any other status, the check fails. The job summary lists each retried link with its
-outcome.
+External links that answer HTTP 408, 429, or 5xx are retried with a direct GET of up to 15
+seconds per attempt, with waits of 2, 8, and 30 seconds between attempts. A longer `Retry-After`
+on a 429 or 503 answer extends the next wait for that link. A link whose `Retry-After` exceeds
+the remaining retry budget is not retried further. A 2xx answer resolves the finding, and 404 and
+other 4xx answers fail the check. Retries do not follow redirects; a link that answers with a
+redirect on retry becomes an **unverified warning**. A 403 answer is a deliberate exception that
+also becomes a warning, because some sites send it to non-browser clients. Links that stay
+unavailable also become unverified warnings, including a retry that gets no response at all, such
+as a DNS failure or a refused connection, because Linkspector's first check already received an
+HTTP status from the host. Warnings do not block a merge. Retries cover at most 25 unique URLs
+within about 150 seconds per run, and links beyond these limits become unverified warnings. Links
+whose host name needs IDNA 2008, such as one with ß or ς, are not retried and become unverified
+warnings. When Linkspector itself reports a missing local file, a DNS or connection failure, a
+browser timeout without an HTTP status, or any other status, the check fails. The job summary
+lists each retried link with its outcome.
 
 For sites that block the initial browser check, `globalping_hosts` enables a second check of
 HTTP 403 results from those exact hosts. Linkspector still checks them first; this is not an

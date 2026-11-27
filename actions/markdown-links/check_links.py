@@ -41,6 +41,8 @@ RETRY_TIMEOUT = 15
 RETRY_BUDGET = 150
 MAX_RETRY_URLS = 25
 USER_AGENT = "SchmiedmayerLab-link-check/1.0"
+# IDNA 2003 maps these characters to a different host than browsers, which use IDNA 2008.
+IDNA_DEVIATIONS = frozenset("\u00df\u03c2\u200c\u200d")
 URL_SAFE = ":/?#[]@!$&'()*+,;=%~"
 
 
@@ -201,12 +203,17 @@ def retry(urls: list[str]) -> dict[str, Finding]:
     findings = {url: Finding(Outcome.UNVERIFIED, "Retry limit reached") for url in urls[MAX_RETRY_URLS:]}
     start = time.monotonic()
     deadline = start + RETRY_BUDGET
-    due = {url: start + RETRY_DELAYS[0] for url in urls[:MAX_RETRY_URLS]}
+    due = {}
+    for url in urls[:MAX_RETRY_URLS]:
+        if IDNA_DEVIATIONS & set(urlsplit(url).hostname or ""):
+            findings[url] = Finding(Outcome.UNVERIFIED, "Host needs IDNA 2008, so it is not retried")
+        else:
+            due[url] = start + RETRY_DELAYS[0]
     attempts = dict.fromkeys(due, 0)
     last = dict.fromkeys(due, "")
     while due:
         url = min(due, key=due.__getitem__)
-        if due[url] > deadline or time.monotonic() > deadline:
+        if max(due[url], time.monotonic()) > deadline:
             del due[url]
             findings[url] = Finding(Outcome.UNVERIFIED, f"Still unavailable on retry ({last[url]})" if last[url]
                                     else "Retry time budget reached")
@@ -216,13 +223,14 @@ def retry(urls: list[str]) -> dict[str, Finding]:
         attempts[url] += 1
         if code is None or code in (408, 429) or code >= 500:
             last[url] = "no response" if code is None else f"HTTP {code}"
-            if attempts[url] == len(RETRY_DELAYS) or time.monotonic() > deadline:
-                due[url] = math.inf
-            elif wait is not None and time.monotonic() + wait > deadline:
-                del due[url]
-                findings[url] = Finding(Outcome.UNVERIFIED, f"Retry-After exceeds the retry budget ({last[url]})")
-            else:
-                due[url] = time.monotonic() + max(RETRY_DELAYS[attempts[url]], wait or 0.0)
+            now = time.monotonic()
+            delay = RETRY_DELAYS[attempts[url]] if attempts[url] < len(RETRY_DELAYS) else math.inf
+            if now + max(delay, wait or 0.0) <= deadline:
+                due[url] = now + max(delay, wait or 0.0)
+                continue
+            del due[url]
+            findings[url] = Finding(Outcome.UNVERIFIED, f"Retry-After exceeds the retry budget ({last[url]})"
+                                    if now + delay <= deadline else f"Still unavailable on retry ({last[url]})")
             continue
         del due[url]
         if 200 <= code < 300:
@@ -265,7 +273,8 @@ def process(report: dict, exit_code: int, hosts: set[str]) -> dict:
         if item["severity"] != "ERROR" or not match:
             continue
         url = match[1]
-        # Opt-in governs disclosure and downgrading of 403 results. Retried diagnostics no longer match.
+        # Opt-in governs disclosure and downgrading of 403 results.
+        # Retried diagnostics have a rewritten message and do not match.
         if measurement_payload(url, hosts) is None:
             continue
         if url not in findings:
