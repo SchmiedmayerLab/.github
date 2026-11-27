@@ -7,6 +7,20 @@
 
 Linkspector 0.5 embeds URL/status in RDJSON messages. Unknown messages remain
 errors. Globalping measurements are public; never submit credentials or queries.
+
+External links that Linkspector reports with HTTP 408, 429, or 5xx are retried
+with a direct GET of up to 15 seconds per attempt, after waits of 2, 8, and 30
+seconds. A Retry-After on a 429 or 503 answer extends the next wait for that
+link, and a link whose Retry-After exceeds the remaining budget is not retried
+further. Retries cover at most 25 unique URLs within about 150 seconds.
+
+- A 2xx answer resolves the finding.
+- A 404 or other 4xx answer fails the check.
+- A 403 answer, a redirect (retries do not follow redirects), a link that stays
+  unavailable or gets no response, a link beyond the limits, and a host that
+  needs IDNA 2008 (such as one with ß or ς) become unverified warnings.
+- Missing local files, DNS or connection failures, browser timeouts without an
+  HTTP status, and every other status in Linkspector's own report fail the check.
 """
 
 from __future__ import annotations
@@ -43,7 +57,7 @@ RETRY_BUDGET = 150
 MAX_RETRY_URLS = 25
 USER_AGENT = "SchmiedmayerLab-link-check/1.0"
 # IDNA 2003 maps these characters to a different host than browsers, which use IDNA 2008.
-IDNA_DEVIATIONS = frozenset("\u00df\u03c2\u200c\u200d")
+IDNA_DEVIATIONS = frozenset("ßς\u200c\u200d")
 URL_SAFE = ":/?#[]@!$&'()*+,;=%~"
 
 
