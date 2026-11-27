@@ -84,11 +84,14 @@ def allowed_hosts(value: str) -> set[str]:
 
 
 def measurement_payload(url: str, hosts: set[str]) -> dict | None:
-    parts = urlsplit(url)
-    if (parts.scheme != "https" or parts.hostname not in hosts or parts.username is not None
-            or parts.password is not None or parts.port not in (None, 443)
-            or parts.query or parts.fragment or any(char.isspace() for char in url)):
-        return None
+    try:
+        parts = urlsplit(url)
+        if (parts.scheme != "https" or parts.hostname not in hosts or parts.username is not None
+                or parts.password is not None or parts.port not in (None, 443)
+                or parts.query or parts.fragment or any(char.isspace() for char in url)):
+            return None
+    except ValueError:
+        return None  # A malformed URL keeps Linkspector's error.
     return {"type": "http", "target": parts.hostname, "limit": 2,
             "locations": [{"magic": "eyeball-network"}],
             "measurementOptions": {"protocol": "HTTPS", "request": {"method": "GET", "path": parts.path or "/"}}}

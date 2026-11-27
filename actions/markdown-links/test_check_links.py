@@ -240,10 +240,13 @@ class RetryTests(unittest.TestCase):
                 self.assertEqual(result["retries"][url]["reason"], "Host needs IDNA 2008, so it is not retried")
 
     def test_a_malformed_url_is_retried_as_no_response(self):
-        url = "https://[bad/x"
-        result, _ = self.process([diagnostic(url, 503)], [None, None, None])
-        self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
-        self.assertEqual(result["retries"][url]["reason"], "Still unavailable on retry (no response)")
+        for url in ("https://[bad/x", "https://a\u2100b.example/x"):
+            with self.subTest(url=url):
+                self.assertEqual(links.probe(url), (None, None))
+                result, _ = self.process([diagnostic(url, 503)], [None, None, None])
+                self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
+                self.assertEqual(result["retries"][url]["reason"], "Still unavailable on retry (no response)")
+                self.assertIsNone(links.measurement_payload(url, HOSTS))
 
     def test_retry_after_does_not_delay_other_urls(self):
         other = URL + "x"
