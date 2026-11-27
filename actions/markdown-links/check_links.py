@@ -17,12 +17,15 @@ from enum import Enum
 import html
 from http.client import HTTPException
 import json
+import math
 import os
 from pathlib import Path
 import re
+import threading
 import time
+from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 
@@ -38,6 +41,7 @@ RETRY_TIMEOUT = 15
 RETRY_BUDGET = 150
 MAX_RETRY_URLS = 25
 USER_AGENT = "SchmiedmayerLab-link-check/1.0"
+URL_SAFE = ":/?#[]@!$&'()*+,;=%~"
 
 
 class Outcome(str, Enum):
@@ -130,40 +134,80 @@ def verify(url: str, hosts: set[str]) -> Finding:
         return Finding(Outcome.UNVERIFIED, "Globalping unavailable or returned invalid results", measurement)
 
 
-def probe(url: str) -> int | None:
-    """Return the final HTTP status of a GET, or None when no response arrived."""
-    try:
-        request = Request(url, headers={"User-Agent": USER_AGENT})
-        with build_opener().open(request, timeout=RETRY_TIMEOUT) as response:
-            return response.status
-    except HTTPError as error:
-        error.close()
-        return error.code
-    except (URLError, HTTPException, OSError, ValueError):
+def parse_retry_after(value: str | None) -> float | None:
+    if not value:
         return None
+    try:
+        seconds = float(value)
+    except ValueError:
+        try:
+            seconds = parsedate_to_datetime(value).timestamp() - time.time()
+        except (TypeError, ValueError, IndexError, OverflowError):
+            return None
+    return max(0.0, seconds) if math.isfinite(seconds) else None
 
 
-def retry(urls: list[str]) -> dict[str, Finding]:
+def fetch(url: str, follow_redirects: bool) -> tuple[int | None, float | None]:
+    handlers = () if follow_redirects else (NoRedirects(),)
+    try:
+        # Linkspector reports links as written; encode spaces and non-ASCII so they can be sent.
+        request = Request(quote(url, safe=URL_SAFE), headers={"User-Agent": USER_AGENT})
+        with build_opener(*handlers).open(request, timeout=RETRY_TIMEOUT) as response:
+            return response.status, None
+    except HTTPError as error:
+        wait = parse_retry_after(error.headers.get("Retry-After")) if error.code == 429 and error.headers else None
+        error.close()
+        return error.code, wait
+    except (URLError, HTTPException, OSError, ValueError):
+        return None, None
+
+
+def probe(url: str, follow_redirects: bool = True) -> tuple[int | None, float | None]:
+    """Return the final HTTP status of a GET and any Retry-After delay; no status when nothing arrived in time."""
+    answer: list = []
+
+    def run() -> None:
+        try:
+            answer.append(fetch(url, follow_redirects))
+        except BaseException as error:  # Re-raised below so unexpected failures still fail the job.
+            answer.append(error)
+
+    # The socket timeout bounds each read, not the whole response; a server can drip bytes past it.
+    worker = threading.Thread(target=run, daemon=True)
+    worker.start()
+    worker.join(RETRY_TIMEOUT)
+    if not answer:
+        return None, None
+    if isinstance(answer[0], BaseException):
+        raise answer[0]
+    return answer[0]
+
+
+def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
     """Retry each URL with backoff until it answers with a non-transient status."""
     findings = {url: Finding(Outcome.UNVERIFIED, "Retry limit reached") for url in urls[MAX_RETRY_URLS:]}
     pending = {url: "" for url in urls[:MAX_RETRY_URLS]}
     deadline = time.monotonic() + RETRY_BUDGET
+    requested = 0.0
     for delay in RETRY_DELAYS:
+        delay, requested = max(delay, requested), 0.0
         if not pending or time.monotonic() + delay > deadline:
             break
         time.sleep(delay)
         for url in list(pending):
             if time.monotonic() > deadline:
                 break
-            code = probe(url)
+            code, wait = probe(url, follow_redirects)
             if code is None or code in (408, 429) or code >= 500:
                 pending[url] = "no response" if code is None else f"HTTP {code}"
+                requested = max(requested, wait or 0.0)
                 continue
             del pending[url]
             if 200 <= code < 300:
                 findings[url] = Finding(Outcome.VERIFIED, f"HTTP {code} on retry")
-            elif code == 403 or code < 400:
-                # A direct request can be blocked or redirected where the browser was not.
+            elif code == 403 or (code < 400 and follow_redirects):
+                # Deliberate exceptions: a direct request can be blocked (403) or end in a redirect
+                # loop where the browser was not, so these warn. Every other 4xx fails the check.
                 findings[url] = Finding(Outcome.UNVERIFIED, f"HTTP {code} on retry")
             else:
                 findings[url] = Finding(Outcome.BROKEN, f"HTTP {code} on retry")
@@ -171,6 +215,15 @@ def retry(urls: list[str]) -> dict[str, Finding]:
         findings[url] = Finding(Outcome.UNVERIFIED, f"Still unavailable on retry ({last})" if last
                                 else "Retry time budget reached")
     return findings
+
+
+def follows_redirects(config: Path) -> bool:
+    """Read Linkspector's followRedirects setting; it defaults to true."""
+    try:
+        text = config.read_text()
+    except FileNotFoundError:
+        return True
+    return not re.search(r"(?m)^followRedirects:[ \t]*false[ \t]*(?:#.*)?$", text)
 
 
 def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
@@ -188,11 +241,12 @@ def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
     return diagnostics
 
 
-def process(report: dict, exit_code: int, hosts: set[str]) -> dict:
+def process(report: dict, exit_code: int, hosts: set[str], follow_redirects: bool = True) -> dict:
     diagnostics = read_diagnostics(report, exit_code)
     transient = [(item, match[1]) for item in diagnostics if item["severity"] == "ERROR"
                  and (match := TRANSIENT.fullmatch(item["message"]))]
-    retries = retry(list(dict.fromkeys(url for _, url in transient))) if transient else {}
+    urls = list(dict.fromkeys(url for _, url in transient))
+    retries = retry(urls, follow_redirects) if urls else {}
     for item, url in transient:
         annotate(item, url, retries[url])
     findings: dict[str, Finding] = {}
@@ -201,7 +255,7 @@ def process(report: dict, exit_code: int, hosts: set[str]) -> dict:
         if item["severity"] != "ERROR" or not match:
             continue
         url = match[1]
-        # Opt-in governs disclosure AND downgrading. All other diagnostics stay errors.
+        # Opt-in governs disclosure AND downgrading of 403 results. Retried diagnostics no longer match.
         if measurement_payload(url, hosts) is None:
             continue
         if url not in findings:
@@ -239,7 +293,7 @@ def emit(result: dict) -> None:
             if result.get("retries"):
                 file.write("### Retried external links\n\n")
                 for url, item in result["retries"].items():
-                    file.write(f"- {Outcome(item['outcome']).value}: <code>{html.escape(url)}</code> — {html.escape(item['reason'])}\n")
+                    file.write(f"- {Outcome(item['outcome']).value}: <code>{html.escape(url)}</code>: {html.escape(item['reason'])}\n")
                 file.write("\n")
             file.write("### External link verification\n\n")
             for url, item in result["fallbacks"].items():
@@ -259,7 +313,8 @@ def main() -> int:
     args = parser.parse_args()
     try:
         report = json.loads(args.report.read_text())
-        result = process(report, args.checker_exit_code, allowed_hosts(args.hosts))
+        result = process(report, args.checker_exit_code, allowed_hosts(args.hosts),
+                         follows_redirects(Path(".linkspector.yml")))
         args.output.write_text(json.dumps(result, indent=2) + "\n")
         emit(result)
         return int(any(item["severity"] == "ERROR" for item in result["diagnostics"]))

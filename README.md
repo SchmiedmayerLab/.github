@@ -174,12 +174,16 @@ workflow therefore adds an ignore pattern for the repository's own URL when the 
 private, and leaves every other link checked.
 
 External links that answer HTTP 408, 429, or 5xx are retried with a direct GET, with waits of
-2, 8, and 30 seconds between attempts. A 2xx answer resolves the finding, 404 and other 4xx
-answers fail the check, and links that stay unavailable, are blocked with 403, or end in a
-redirect become **unverified warnings** that do not block a merge. Retries cover at most 25
-unique URLs within about 150 seconds per run; links beyond these limits also become unverified
-warnings. Local files, DNS and connection failures, and every other status keep Linkspector's
-failure. The job summary lists each retried link with its outcome.
+2, 8, and 30 seconds between attempts; a longer `Retry-After` on a 429 answer extends the next
+wait. A 2xx answer resolves the finding, and 404 and other 4xx answers fail the check. Two
+answers are deliberate exceptions that become **unverified warnings**, because a direct request
+can be treated differently from the browser: 403, which some sites send to non-browser clients, and a
+redirect that does not resolve, such as a loop. With `followRedirects: false` in the Linkspector
+configuration, any redirect on retry fails the check. Links that stay unavailable also become
+unverified warnings; warnings do not block a merge. Retries cover at most 25 unique URLs within
+about 150 seconds per run, and links beyond these limits become unverified warnings. Local files,
+DNS and connection failures, browser timeouts without an HTTP status, and every other status
+keep Linkspector's failure. The job summary lists each retried link with its outcome.
 
 For sites that block the initial browser check, `globalping_hosts` enables a second check of
 HTTP 403 results from those exact hosts. Linkspector still checks them first; this is not an
