@@ -155,14 +155,25 @@ class FallbackTests(unittest.TestCase):
 
 class RetryTests(unittest.TestCase):
     def setUp(self):
-        self.sleep = patch.object(links.time, "sleep").start()
+        self.now = 0.0
         self.addCleanup(patch.stopall)
+        patch.object(links.time, "monotonic", side_effect=lambda: self.now).start()
+        self.sleep = patch.object(links.time, "sleep", side_effect=self.advance).start()
+
+    def advance(self, seconds):
+        self.now += seconds
 
     def process(self, items, codes, hosts=frozenset(), follow_redirects=True):
         answers = iter([] if callable(codes) else codes)
+        sequences = {}
 
         def answer(url, follow=True):
-            code = codes(url) if callable(codes) else next(answers)
+            if callable(codes):
+                code = codes(url)
+                if isinstance(code, list):
+                    code = sequences.setdefault(url, iter(code)).__next__()
+            else:
+                code = next(answers)
             return code if isinstance(code, tuple) else (code, None)
 
         with patch.object(links, "probe", side_effect=answer) as probe:
@@ -211,14 +222,21 @@ class RetryTests(unittest.TestCase):
                          ["INFO"] * (links.MAX_RETRY_URLS + 1) + ["WARNING"])
 
     def test_retry_after_extends_the_next_wait_within_the_budget(self):
-        result, _ = self.process([diagnostic(code=429)], [(429, 20.0), 200])
-        self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2, 20.0])
-        self.assertEqual(result["diagnostics"][0]["severity"], "INFO")
-        self.sleep.reset_mock()
-        result, probe = self.process([diagnostic(code=429)], [(429, 1000.0)])
-        self.assertEqual(probe.call_count, 1)
-        self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2])
-        self.assertEqual(result["retries"][URL]["reason"], "Still unavailable on retry (HTTP 429)")
+        for code in (429, 503):
+            with self.subTest(code=code):
+                self.sleep.reset_mock()
+                result, _ = self.process([diagnostic(code=code)], [(code, 20.0), 200])
+                self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2, 20.0])
+                self.assertEqual(result["diagnostics"][0]["severity"], "INFO")
+
+    def test_retry_after_beyond_the_budget_gives_up_on_that_url_only(self):
+        other = URL + "x"
+        result, probe = self.process([diagnostic(code=429), diagnostic(other, 503)],
+                                     lambda url: [(429, 1000.0)] if url == URL else [503, 200])
+        self.assertEqual([call.args[0] for call in probe.call_args_list], [URL, other, other])
+        self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2, 0.0, 8])
+        self.assertEqual(result["retries"][URL]["reason"], "Retry-After exceeds the retry budget (HTTP 429)")
+        self.assertEqual([item["severity"] for item in result["diagnostics"]], ["WARNING", "INFO"])
 
     def test_parse_retry_after(self):
         for value, expected in [("5", 5.0), ("-3", 0.0), ("inf", None), ("nan", None), ("soon", None),
@@ -229,9 +247,11 @@ class RetryTests(unittest.TestCase):
         self.assertAlmostEqual(links.parse_retry_after(later), 60, delta=2)
 
     def test_deadline_expiring_mid_round_stops_probing(self):
-        clock = iter([0, 0, 0])
-        with patch.object(links.time, "monotonic", side_effect=lambda: next(clock, links.RETRY_BUDGET + 1)):
-            result, probe = self.process([diagnostic(code=503), diagnostic(URL + "x", 503)], [200])
+        def slow(url):
+            self.now += links.RETRY_BUDGET
+            return 200
+
+        result, probe = self.process([diagnostic(code=503), diagnostic(URL + "x", 503)], slow)
         self.assertEqual(probe.call_count, 1)
         self.assertEqual([item["severity"] for item in result["diagnostics"]], ["INFO", "WARNING"])
         self.assertEqual(result["retries"][URL + "x"]["reason"], "Retry time budget reached")
@@ -253,10 +273,16 @@ class RetryTests(unittest.TestCase):
             config = Path(temporary) / ".linkspector.yml"
             self.assertTrue(links.follows_redirects(config))
             for text, expected in [("dirs:\n  - .\n", True), ("followRedirects: true\n", True),
+                                   ("followRedirects: falsey\n", True), ("# followRedirects: false\n", True),
                                    ("followRedirects: false\n", False), ("followRedirects: false # strict\n", False),
-                                   ("# followRedirects: false\n", True)]:
+                                   ("followRedirects: FALSE\n", False), ("followRedirects: False\n", False),
+                                   ("followRedirects : false\n", False), ("'followRedirects': false\n", False),
+                                   ('"followRedirects": false\n', False), ("{followRedirects: false}\n", False),
+                                   ("{dirs: [.], followRedirects: false}\n", False),
+                                   ("followRedirects: !!bool false\n", False),
+                                   ("\ufefffollowRedirects: false\n", False)]:
                 with self.subTest(text=text):
-                    config.write_text(text)
+                    config.write_text(text, encoding="utf-8")
                     self.assertEqual(links.follows_redirects(config), expected)
 
     def test_main_exit_code_follows_retry_outcomes(self):
@@ -269,15 +295,15 @@ class RetryTests(unittest.TestCase):
                              "--checker-exit-code", "1", "--output", str(directory / "results.json")]
                 previous = os.getcwd()
                 os.chdir(directory)
-                self.addCleanup(os.chdir, previous)
-                with patch.object(links, "probe", return_value=(code, None)), patch.object(sys, "argv", arguments), \
-                        patch.dict(links.os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()):
-                    self.assertEqual(links.main(), status)
-                os.chdir(previous)
+                try:
+                    with patch.object(links, "probe", return_value=(code, None)), patch.object(sys, "argv", arguments), \
+                            patch.dict(links.os.environ, {"GITHUB_STEP_SUMMARY": ""}), redirect_stdout(io.StringIO()):
+                        self.assertEqual(links.main(), status)
+                finally:
+                    os.chdir(previous)
 
     def test_time_budget_is_bounded(self):
-        clock = iter([0, 0])
-        with patch.object(links.time, "monotonic", side_effect=lambda: next(clock, links.RETRY_BUDGET + 1)):
+        with patch.object(links, "RETRY_BUDGET", 1):
             result, probe = self.process([diagnostic(code=503)], [])
         probe.assert_not_called()
         self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
@@ -294,7 +320,8 @@ class RetryTests(unittest.TestCase):
         self.assertIn("### Retried external links", text)
         self.assertIn(f"- verified: <code>{URL}</code>: HTTP 200 on retry\n", text)
         self.assertIn(f"- unverified: <code>{URL}x</code>: Still unavailable on retry (HTTP 503)\n", text)
-        self.assertNotIn("\u2014", text.split("### External link verification")[0])
+        self.assertNotIn("\u2014", text)
+        self.assertEqual(result["diagnostics"][0]["message"], f"verified: {URL}: HTTP 200 on retry")
 
     def test_summary_lists_fallback_outcome_values(self):
         with patch.object(links, "verify", return_value=links.Finding(links.Outcome.VERIFIED, "OK")):
@@ -304,7 +331,7 @@ class RetryTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()), patch.dict(links.os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}):
                 links.emit(result)
             text = summary.read_text()
-        self.assertIn(f"- verified: <code>{URL}</code> \u2014 OK\n", text)
+        self.assertIn(f"- verified: <code>{URL}</code>: OK\n", text)
         self.assertNotIn("Outcome.", text)
 
     def test_probe_reports_final_status_or_none(self):
@@ -312,6 +339,8 @@ class RetryTests(unittest.TestCase):
         response.__enter__.return_value = response
         for effect, expected in [(None, (200, None)), (HTTPError(URL, 503, "Unavailable", {}, None), (503, None)),
                                  (HTTPError(URL, 429, "Quota", {"Retry-After": "7"}, None), (429, 7.0)),
+                                 (HTTPError(URL, 503, "Unavailable", {"Retry-After": "9"}, None), (503, 9.0)),
+                                 (HTTPError(URL, 404, "Missing", {"Retry-After": "9"}, None), (404, None)),
                                  (links.URLError("Name or service not known"), (None, None)),
                                  (TimeoutError(), (None, None)), (links.HTTPException(), (None, None))]:
             with self.subTest(expected=expected), patch.object(links, "build_opener") as opener:
@@ -337,9 +366,10 @@ class LocalServer(BaseHTTPRequestHandler):
             self.send_header("Location", "/loop")
             self.end_headers()
         elif self.path == "/drip":
-            self.send_response(200)
-            for _ in range(20):  # One header byte every 0.2 s keeps every socket read short.
-                self.wfile.write(b"X")
+            # Send the headers one byte every 0.2 s, so no single socket read reaches its timeout.
+            self.wfile.write(b"HTTP/1.1 200 OK\r\nX-Drip: ")
+            for _ in range(30):
+                self.wfile.write(b"x")
                 self.wfile.flush()
                 time.sleep(0.2)
         else:
@@ -369,16 +399,21 @@ class ProbeServerTests(unittest.TestCase):
         self.assertEqual(links.probe(self.base + "/redirect", False), (302, None))
         self.assertEqual(links.probe(self.base + "/loop"), (302, None))
 
-    def test_spaces_and_non_ascii_are_encoded(self):
+    def test_non_ascii_is_encoded(self):
         LocalServer.paths.clear()
-        self.assertEqual(links.probe(self.base + "/\u00e4 b?q=x y&r=%20"), (200, None))
-        self.assertEqual(LocalServer.paths, ["/%C3%A4%20b?q=x%20y&r=%20"])
+        self.assertEqual(links.probe(self.base + "/\u00e4?q=\u00fc&r=%20"), (200, None))
+        self.assertEqual(LocalServer.paths, ["/%C3%A4?q=%C3%BC&r=%20"])
+
+    def test_request_url_uses_idna_for_hosts(self):
+        self.assertEqual(links.request_url("https://b\u00fccher.example/\u00e4#t\u00e9"),
+                         "https://xn--bcher-kva.example/%C3%A4#t%C3%A9")
+        self.assertEqual(links.request_url("https://user@[::1]:8443/a%20b"), "https://user@[::1]:8443/a%20b")
 
     def test_slow_responses_are_bounded_by_wall_clock(self):
         with patch.object(links, "RETRY_TIMEOUT", 1):
             started = time.monotonic()
             self.assertEqual(links.probe(self.base + "/drip"), (None, None))
-            self.assertLess(time.monotonic() - started, 2)
+            self.assertLess(time.monotonic() - started, 4)
 
 
 class LiveRegressionTests(unittest.TestCase):

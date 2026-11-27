@@ -25,7 +25,7 @@ import threading
 import time
 from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlsplit, urlunsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 
@@ -147,15 +147,30 @@ def parse_retry_after(value: str | None) -> float | None:
     return max(0.0, seconds) if math.isfinite(seconds) else None
 
 
+def request_url(url: str) -> str:
+    """Encode a link for sending: IDNA for the host, percent-encoding for non-ASCII elsewhere."""
+    parts = urlsplit(url)
+    host = (parts.hostname or "").encode("idna").decode("ascii")
+    netloc = f"[{host}]" if ":" in host else host
+    if parts.port is not None:
+        netloc += f":{parts.port}"
+    userinfo = parts.netloc.rpartition("@")[0]
+    if userinfo:
+        netloc = quote(userinfo, safe=URL_SAFE) + "@" + netloc
+    return urlunsplit((parts.scheme, netloc, *(quote(part, safe=URL_SAFE)
+                                              for part in (parts.path, parts.query, parts.fragment))))
+
+
 def fetch(url: str, follow_redirects: bool) -> tuple[int | None, float | None]:
     handlers = () if follow_redirects else (NoRedirects(),)
     try:
-        # Linkspector reports links as written; encode spaces and non-ASCII so they can be sent.
-        request = Request(quote(url, safe=URL_SAFE), headers={"User-Agent": USER_AGENT})
+        # Markdown links can contain non-ASCII characters, which urllib cannot send as written.
+        request = Request(request_url(url), headers={"User-Agent": USER_AGENT})
         with build_opener(*handlers).open(request, timeout=RETRY_TIMEOUT) as response:
             return response.status, None
     except HTTPError as error:
-        wait = parse_retry_after(error.headers.get("Retry-After")) if error.code == 429 and error.headers else None
+        wait = (parse_retry_after(error.headers.get("Retry-After"))
+                if error.code in (429, 503) and error.headers else None)
         error.close()
         return error.code, wait
     except (URLError, HTTPException, OSError, ValueError):
@@ -186,44 +201,55 @@ def probe(url: str, follow_redirects: bool = True) -> tuple[int | None, float | 
 def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
     """Retry each URL with backoff until it answers with a non-transient status."""
     findings = {url: Finding(Outcome.UNVERIFIED, "Retry limit reached") for url in urls[MAX_RETRY_URLS:]}
-    pending = {url: "" for url in urls[:MAX_RETRY_URLS]}
-    deadline = time.monotonic() + RETRY_BUDGET
-    requested = 0.0
-    for delay in RETRY_DELAYS:
-        delay, requested = max(delay, requested), 0.0
-        if not pending or time.monotonic() + delay > deadline:
-            break
-        time.sleep(delay)
-        for url in list(pending):
-            if time.monotonic() > deadline:
-                break
-            code, wait = probe(url, follow_redirects)
-            if code is None or code in (408, 429) or code >= 500:
-                pending[url] = "no response" if code is None else f"HTTP {code}"
-                requested = max(requested, wait or 0.0)
-                continue
-            del pending[url]
-            if 200 <= code < 300:
-                findings[url] = Finding(Outcome.VERIFIED, f"HTTP {code} on retry")
-            elif code == 403 or (code < 400 and follow_redirects):
-                # Deliberate exceptions: a direct request can be blocked (403) or end in a redirect
-                # loop where the browser was not, so these warn. Every other 4xx fails the check.
-                findings[url] = Finding(Outcome.UNVERIFIED, f"HTTP {code} on retry")
+    start = time.monotonic()
+    deadline = start + RETRY_BUDGET
+    due = {url: start + RETRY_DELAYS[0] for url in urls[:MAX_RETRY_URLS]}
+    attempts = dict.fromkeys(due, 0)
+    last = dict.fromkeys(due, "")
+    while due:
+        url = min(due, key=due.__getitem__)
+        if due[url] > deadline or time.monotonic() > deadline:
+            del due[url]
+            findings[url] = Finding(Outcome.UNVERIFIED, f"Still unavailable on retry ({last[url]})" if last[url]
+                                    else "Retry time budget reached")
+            continue
+        time.sleep(max(0.0, due[url] - time.monotonic()))
+        code, wait = probe(url, follow_redirects)
+        attempts[url] += 1
+        if code is None or code in (408, 429) or code >= 500:
+            last[url] = "no response" if code is None else f"HTTP {code}"
+            if attempts[url] == len(RETRY_DELAYS):
+                due[url] = math.inf
+            elif wait is not None and time.monotonic() + wait > deadline:
+                del due[url]
+                findings[url] = Finding(Outcome.UNVERIFIED, f"Retry-After exceeds the retry budget ({last[url]})")
             else:
-                findings[url] = Finding(Outcome.BROKEN, f"HTTP {code} on retry")
-    for url, last in pending.items():
-        findings[url] = Finding(Outcome.UNVERIFIED, f"Still unavailable on retry ({last})" if last
-                                else "Retry time budget reached")
+                due[url] = time.monotonic() + max(RETRY_DELAYS[attempts[url]], wait or 0.0)
+            continue
+        del due[url]
+        if 200 <= code < 300:
+            findings[url] = Finding(Outcome.VERIFIED, f"HTTP {code} on retry")
+        elif code == 403 or (code < 400 and follow_redirects):
+            # Deliberate exceptions: a direct request can be blocked (403) or end in a redirect
+            # loop where the browser was not, so these warn. Every other 4xx fails the check.
+            findings[url] = Finding(Outcome.UNVERIFIED, f"HTTP {code} on retry")
+        else:
+            findings[url] = Finding(Outcome.BROKEN, f"HTTP {code} on retry")
     return findings
+
+
+FOLLOW_REDIRECTS_FALSE = re.compile(
+    r"""(?:^|[{,])[ \t]*(["']?)followRedirects\1[ \t]*:[ \t]*(?:!!bool[ \t]+)?(?i:false)[ \t]*(?=$|[,}#])""",
+    re.MULTILINE)
 
 
 def follows_redirects(config: Path) -> bool:
     """Read Linkspector's followRedirects setting; it defaults to true."""
     try:
-        text = config.read_text()
+        text = config.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return True
-    return not re.search(r"(?m)^followRedirects:[ \t]*false[ \t]*(?:#.*)?$", text)
+    return not FOLLOW_REDIRECTS_FALSE.search(text)
 
 
 def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
@@ -268,7 +294,7 @@ def process(report: dict, exit_code: int, hosts: set[str], follow_redirects: boo
 
 def annotate(item: dict, url: str, finding: Finding) -> None:
     item["severity"] = {Outcome.VERIFIED: "INFO", Outcome.BROKEN: "ERROR", Outcome.UNVERIFIED: "WARNING"}[finding.outcome]
-    item["message"] = f"{finding.outcome.value}: {url} — {finding.reason}"
+    item["message"] = f"{finding.outcome.value}: {url}: {finding.reason}"
 
 
 def escape_annotation(value: str, *, property_value: bool = False) -> str:
@@ -297,7 +323,7 @@ def emit(result: dict) -> None:
                 file.write("\n")
             file.write("### External link verification\n\n")
             for url, item in result["fallbacks"].items():
-                file.write(f"- {Outcome(item['outcome']).value}: <code>{html.escape(url)}</code> — {html.escape(item['reason'])}\n")
+                file.write(f"- {Outcome(item['outcome']).value}: <code>{html.escape(url)}</code>: {html.escape(item['reason'])}\n")
                 if item["measurement"]:
                     file.write(f"  [Measurement]({item['measurement']})\n")
             if not result["fallbacks"]:
