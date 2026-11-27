@@ -230,13 +230,20 @@ class RetryTests(unittest.TestCase):
                 self.assertEqual(result["diagnostics"][0]["severity"], "INFO")
 
     def test_idna_deviation_hosts_are_not_probed(self):
-        for host in ("stra\u00dfe.example", "\u03c3\u03bf\u03c6\u03bf\u03c2.example", "a\u200cb.example", "a\u200db.example"):
+        for host in ("stra\u00dfe.example", "\u03c3\u03bf\u03c6\u03bf\u03c2.example", "a\u200cb.example", "a\u200db.example",
+                     "stra\u1e9ee.example", "a\U0001d6d3.example"):
             with self.subTest(host=host):
                 url = f"https://{host}/guide"
                 result, probe = self.process([diagnostic(url, 503)], [])
                 probe.assert_not_called()
                 self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
                 self.assertEqual(result["retries"][url]["reason"], "Host needs IDNA 2008, so it is not retried")
+
+    def test_a_malformed_url_is_retried_as_no_response(self):
+        url = "https://[bad/x"
+        result, _ = self.process([diagnostic(url, 503)], [None, None, None])
+        self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
+        self.assertEqual(result["retries"][url]["reason"], "Still unavailable on retry (no response)")
 
     def test_retry_after_does_not_delay_other_urls(self):
         other = URL + "x"

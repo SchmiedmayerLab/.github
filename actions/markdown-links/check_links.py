@@ -23,6 +23,7 @@ from pathlib import Path
 import re
 import threading
 import time
+import unicodedata
 from email.utils import parsedate_to_datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit, urlunsplit
@@ -198,6 +199,15 @@ def probe(url: str) -> tuple[int | None, float | None]:
     return answer[0]
 
 
+def needs_idna_2008(url: str) -> bool:
+    """Whether the host has characters that the IDNA 2003 codec maps to a different host."""
+    try:
+        host = urlsplit(url).hostname or ""
+    except ValueError:
+        return False  # The probe reports a malformed URL as no response.
+    return bool(IDNA_DEVIATIONS & set(unicodedata.normalize("NFKC", host)))
+
+
 def retry(urls: list[str]) -> dict[str, Finding]:
     """Retry each URL with backoff until it answers with a non-transient status."""
     findings = {url: Finding(Outcome.UNVERIFIED, "Retry limit reached") for url in urls[MAX_RETRY_URLS:]}
@@ -205,7 +215,7 @@ def retry(urls: list[str]) -> dict[str, Finding]:
     deadline = start + RETRY_BUDGET
     due = {}
     for url in urls[:MAX_RETRY_URLS]:
-        if IDNA_DEVIATIONS & set(urlsplit(url).hostname or ""):
+        if needs_idna_2008(url):
             findings[url] = Finding(Outcome.UNVERIFIED, "Host needs IDNA 2008, so it is not retried")
         else:
             due[url] = start + RETRY_DELAYS[0]
