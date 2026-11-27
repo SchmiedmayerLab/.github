@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: MIT
 
 name: Check Markdown Links
-description: Run Linkspector once and optionally verify public HTTP 403 results through Globalping.
+description: Run Linkspector, retry transient external failures without following redirects, and optionally verify HTTP 403 results via Globalping.
 inputs:
   working_directory:
     description: Directory containing the Markdown files and Linkspector configuration.

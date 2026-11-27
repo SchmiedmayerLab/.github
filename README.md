@@ -173,6 +173,11 @@ Linkspector browses anonymously, so in a **private** repository every link back 
 workflow therefore adds an ignore pattern for the repository's own URL when the repository is
 private, and leaves every other link checked.
 
+External links that answer HTTP 408, 429, or 5xx are retried for about 150 seconds per run.
+A 2xx answer resolves the finding, a 404 or other 4xx answer fails the check, and any other result
+becomes an **unverified warning** that does not block a merge. The retry rules are documented in
+[`check_links.py`](actions/markdown-links/check_links.py).
+
 For sites that block the initial browser check, `globalping_hosts` enables a second check of
 HTTP 403 results from those exact hosts. Linkspector still checks them first; this is not an
 ignore list. The fallback uses [Globalping](https://globalping.io/) without an account or API key.
@@ -214,7 +219,7 @@ workflow and action at the same commit, independently of the caller's checkout.
 shared action against Zenodo, a valid local document, and a deliberately missing document.
 A separate live fallback check requires the public URL to return successful
 responses with verified TLS; unverified warnings fail this regression. Unit tests cover
-blocked probes, outages, malformed reports, and preservation of other link errors without
+retries, blocked probes, outages, malformed reports, and preservation of other link errors without
 depending on external services. Reports are retained for seven days; no PR comments are posted.
 
 ##### Run Periphery

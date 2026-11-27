@@ -33,6 +33,9 @@ jobs:
   markdown_link_check:
     name: Markdown Links
     runs-on: ${{ fromJson(inputs.runs_on_labels) }}
+    # Covers Linkspector, up to ten Globalping measurements and the bounded retries, about 14
+    # minutes in the worst case.
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
         with:
