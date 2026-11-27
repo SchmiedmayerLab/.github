@@ -355,11 +355,17 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
       - name: Resolve dependencies (xcodebuild)
         if: ${{ inputs.scheme != '' }}
+        # Fail fast instead of at the job's six-hour limit if resolution hangs; a cold resolve takes well under this.
+        timeout-minutes: 45
         env:
           # Package fetches answer GitHub's challenge with the job token; anonymous clones are throttled per address.
-          GIT_CONFIG_COUNT: 1
+          # The empty credential.helper keeps git from saving that token to the macOS keychain: SwiftPM later looks up
+          # github.com credentials there, and the item's access prompt blocks a headless runner until the job times out.
+          GIT_CONFIG_COUNT: 2
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
+          GIT_CONFIG_KEY_1: credential.helper
+          GIT_CONFIG_VALUE_1: ''
         run: |
             xcodebuild \
               -scheme "${{ inputs.scheme }}" \
@@ -371,9 +377,11 @@ jobs:
       - name: Build and test (xcodebuild)
         if: ${{ inputs.scheme != '' }}
         env:
-          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_COUNT: 2
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
+          GIT_CONFIG_KEY_1: credential.helper
+          GIT_CONFIG_VALUE_1: ''
         run: |
             if ${{ inputs.test }}; then
                 XCODECOMMAND="test"
@@ -430,9 +438,11 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_API_KEY_BASE64: ${{ secrets.APP_STORE_CONNECT_API_KEY_BASE64 }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_COUNT: 2
           GIT_CONFIG_KEY_0: url.https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/.insteadOf
           GIT_CONFIG_VALUE_0: https://github.com/
+          GIT_CONFIG_KEY_1: credential.helper
+          GIT_CONFIG_VALUE_1: ''
           GOOGLE_APPLICATION_CREDENTIALS_BASE64: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS_BASE64 }}
           SETUP_FIREBASE_EMULATOR: ${{ inputs.setupfirebaseemulator }}
           FIREBASE_JSON_PATH: ${{ inputs.firebasejsonpath }}
