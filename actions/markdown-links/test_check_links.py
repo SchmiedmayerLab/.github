@@ -229,6 +229,22 @@ class RetryTests(unittest.TestCase):
                 self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2, 20.0])
                 self.assertEqual(result["diagnostics"][0]["severity"], "INFO")
 
+    def test_retry_after_does_not_delay_other_urls(self):
+        other = URL + "x"
+        result, probe = self.process([diagnostic(code=429), diagnostic(other, 503)],
+                                     lambda url: [(429, 100.0), 200] if url == URL else [503, 200])
+        self.assertEqual([call.args[0] for call in probe.call_args_list], [URL, other, other, URL])
+        self.assertEqual([call.args[0] for call in self.sleep.call_args_list], [2, 0.0, 8, 92.0])
+        self.assertEqual(list(result["retries"]), [URL, other])
+
+    def test_retry_after_arriving_past_the_deadline_is_still_unavailable(self):
+        def late(url):
+            self.now += links.RETRY_BUDGET
+            return 429, 1.0
+
+        result, _ = self.process([diagnostic(code=429)], late)
+        self.assertEqual(result["retries"][URL]["reason"], "Still unavailable on retry (HTTP 429)")
+
     def test_retry_after_beyond_the_budget_gives_up_on_that_url_only(self):
         other = URL + "x"
         result, probe = self.process([diagnostic(code=429), diagnostic(other, 503)],
@@ -272,15 +288,21 @@ class RetryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             config = Path(temporary) / ".linkspector.yml"
             self.assertTrue(links.follows_redirects(config))
-            for text, expected in [("dirs:\n  - .\n", True), ("followRedirects: true\n", True),
-                                   ("followRedirects: falsey\n", True), ("# followRedirects: false\n", True),
-                                   ("followRedirects: false\n", False), ("followRedirects: false # strict\n", False),
-                                   ("followRedirects: FALSE\n", False), ("followRedirects: False\n", False),
-                                   ("followRedirects : false\n", False), ("'followRedirects': false\n", False),
-                                   ('"followRedirects": false\n', False), ("{followRedirects: false}\n", False),
-                                   ("{dirs: [.], followRedirects: false}\n", False),
-                                   ("followRedirects: !!bool false\n", False),
-                                   ("\ufefffollowRedirects: false\n", False)]:
+            following = ["dirs:\n  - .\n", "# followRedirects: false\n", "dirs: [.] # followRedirects: false\n",
+                         "followRedirects: true\n", "followRedirects: TRUE # strict later\n",
+                         "'followRedirects': True\n", '"followRedirects" : true\n',
+                         'followRedirects: "false"\n', "followRedirects: 'false'\n",
+                         "followRedirects: no\n", "followRedirects: OFF\n"]
+            strict = ["followRedirects: false\n", "followRedirects: false # strict\n", "followRedirects: FALSE\n",
+                      "followRedirects : false\n", "'followRedirects': false\n", '"followRedirects": false\n',
+                      "{followRedirects: false}\n", "{dirs: [.], followRedirects: true}\n",
+                      "followRedirects: !!bool false\n", 'followRedirects: !!bool "false"\n',
+                      "\ufefffollowRedirects: false\n", "followRedirects: falsey\n", "followRedirects: 0\n",
+                      "followRedirects:\n  false\n", "followRedirects: &value false\n",
+                      "strict: &value false\nfollowRedirects: *value\n", "? followRedirects\n: false\n",
+                      '"follow\\u0052edirects": false\n', '"follow\\x52edirects": false\n',
+                      "followRedirects: true\nfollowRedirects: false\n"]
+            for text, expected in [(text, True) for text in following] + [(text, False) for text in strict]:
                 with self.subTest(text=text):
                     config.write_text(text, encoding="utf-8")
                     self.assertEqual(links.follows_redirects(config), expected)
@@ -352,6 +374,19 @@ class RetryTests(unittest.TestCase):
                 self.assertNotIn("Authorization", request.headers)
 
 
+class RequestUrlTests(unittest.TestCase):
+    def test_request_url_uses_idna_for_hosts_and_drops_userinfo(self):
+        self.assertEqual(links.request_url("https://b\u00fccher.example/\u00e4#t\u00e9"),
+                         "https://xn--bcher-kva.example/%C3%A4#t%C3%A9")
+        self.assertEqual(links.request_url("https://user:secret@[::1]:8443/a%20b"), "https://[::1]:8443/a%20b")
+
+    def test_invalid_hosts_and_ports_get_no_response(self):
+        for url in ["https://" + "a" * 64 + ".example/", "https://example.org:99999/"]:
+            with self.subTest(url=url), patch.object(links, "build_opener") as opener:
+                self.assertEqual(links.probe(url), (None, None))
+                opener.return_value.open.assert_not_called()
+
+
 class LocalServer(BaseHTTPRequestHandler):
     paths = []
 
@@ -403,11 +438,6 @@ class ProbeServerTests(unittest.TestCase):
         LocalServer.paths.clear()
         self.assertEqual(links.probe(self.base + "/\u00e4?q=\u00fc&r=%20"), (200, None))
         self.assertEqual(LocalServer.paths, ["/%C3%A4?q=%C3%BC&r=%20"])
-
-    def test_request_url_uses_idna_for_hosts(self):
-        self.assertEqual(links.request_url("https://b\u00fccher.example/\u00e4#t\u00e9"),
-                         "https://xn--bcher-kva.example/%C3%A4#t%C3%A9")
-        self.assertEqual(links.request_url("https://user@[::1]:8443/a%20b"), "https://user@[::1]:8443/a%20b")
 
     def test_slow_responses_are_bounded_by_wall_clock(self):
         with patch.object(links, "RETRY_TIMEOUT", 1):

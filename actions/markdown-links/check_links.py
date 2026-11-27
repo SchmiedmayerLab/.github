@@ -148,15 +148,13 @@ def parse_retry_after(value: str | None) -> float | None:
 
 
 def request_url(url: str) -> str:
-    """Encode a link for sending: IDNA for the host, percent-encoding for non-ASCII elsewhere."""
+    """Return the link with an IDNA host, no userinfo, and a percent-encoded path, query, and fragment."""
     parts = urlsplit(url)
+    # Python's idna codec implements IDNA 2003; hosts it rejects raise UnicodeError, a ValueError.
     host = (parts.hostname or "").encode("idna").decode("ascii")
     netloc = f"[{host}]" if ":" in host else host
     if parts.port is not None:
         netloc += f":{parts.port}"
-    userinfo = parts.netloc.rpartition("@")[0]
-    if userinfo:
-        netloc = quote(userinfo, safe=URL_SAFE) + "@" + netloc
     return urlunsplit((parts.scheme, netloc, *(quote(part, safe=URL_SAFE)
                                               for part in (parts.path, parts.query, parts.fragment))))
 
@@ -218,7 +216,7 @@ def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
         attempts[url] += 1
         if code is None or code in (408, 429) or code >= 500:
             last[url] = "no response" if code is None else f"HTTP {code}"
-            if attempts[url] == len(RETRY_DELAYS):
+            if attempts[url] == len(RETRY_DELAYS) or time.monotonic() > deadline:
                 due[url] = math.inf
             elif wait is not None and time.monotonic() + wait > deadline:
                 del due[url]
@@ -235,21 +233,37 @@ def retry(urls: list[str], follow_redirects: bool = True) -> dict[str, Finding]:
             findings[url] = Finding(Outcome.UNVERIFIED, f"HTTP {code} on retry")
         else:
             findings[url] = Finding(Outcome.BROKEN, f"HTTP {code} on retry")
-    return findings
+    return {url: findings[url] for url in urls}
 
 
-FOLLOW_REDIRECTS_FALSE = re.compile(
-    r"""(?:^|[{,])[ \t]*(["']?)followRedirects\1[ \t]*:[ \t]*(?:!!bool[ \t]+)?(?i:false)[ \t]*(?=$|[,}#])""",
-    re.MULTILINE)
+YAML_COMMENT = re.compile(r"(?:^|[ \t])#.*$")
+YAML_ESCAPE = re.compile(r"\\(?:x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|U([0-9A-Fa-f]{8}))")
+# Linkspector validates the configuration but uses the raw value, so quoted "false" and the
+# YAML 1.1 words no and off are truthy strings and leave redirects enabled.
+FOLLOWING = re.compile(r"""[ \t]*(["']?)followRedirects\1[ \t]*:[ \t]*"""
+                       r"""(?:(?i:true|no|off)|"(?i:false)"|'(?i:false)')[ \t]*""")
 
 
 def follows_redirects(config: Path) -> bool:
-    """Read Linkspector's followRedirects setting; it defaults to true."""
+    """Read Linkspector's followRedirects setting, failing closed.
+
+    Without a configuration or key, redirects are followed. Any occurrence of the key outside a
+    comment that is not a plain truthy value counts as false, so the retry never follows a
+    redirect that Linkspector would reject.
+    """
     try:
         text = config.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return True
-    return not FOLLOW_REDIRECTS_FALSE.search(text)
+    for line in text.splitlines():
+        try:
+            line = YAML_ESCAPE.sub(lambda match: chr(int(next(filter(None, match.groups())), 16)),
+                                   YAML_COMMENT.sub("", line))
+        except ValueError:
+            return False
+        if "followRedirects" in line and not FOLLOWING.fullmatch(line):
+            return False
+    return True
 
 
 def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
