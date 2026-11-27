@@ -173,6 +173,14 @@ Linkspector browses anonymously, so in a **private** repository every link back 
 workflow therefore adds an ignore pattern for the repository's own URL when the repository is
 private, and leaves every other link checked.
 
+External links that answer HTTP 408, 429, or 5xx are retried with a direct GET, with waits of
+2, 8, and 30 seconds between attempts. A 2xx answer resolves the finding, 404 and other 4xx
+answers fail the check, and links that stay unavailable, are blocked with 403, or end in a
+redirect become **unverified warnings** that do not block a merge. Retries cover at most 25
+unique URLs within about 150 seconds per run; links beyond these limits also become unverified
+warnings. Local files, DNS and connection failures, and every other status keep Linkspector's
+failure. The job summary lists each retried link with its outcome.
+
 For sites that block the initial browser check, `globalping_hosts` enables a second check of
 HTTP 403 results from those exact hosts. Linkspector still checks them first; this is not an
 ignore list. The fallback uses [Globalping](https://globalping.io/) without an account or API key.
@@ -214,7 +222,7 @@ workflow and action at the same commit, independently of the caller's checkout.
 shared action against Zenodo, a valid local document, and a deliberately missing document.
 A separate live fallback check requires the public URL to return successful
 responses with verified TLS; unverified warnings fail this regression. Unit tests cover
-blocked probes, outages, malformed reports, and preservation of other link errors without
+retries, blocked probes, outages, malformed reports, and preservation of other link errors without
 depending on external services. Reports are retained for seven days; no PR comments are posted.
 
 ##### Run Periphery

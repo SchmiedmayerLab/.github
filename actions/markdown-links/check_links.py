@@ -3,7 +3,7 @@
 # SPDX-FileCopyrightText: 2026 Schmiedmayer Lab and the project authors (see CONTRIBUTORS.md)
 # SPDX-License-Identifier: MIT
 
-"""Resolve opted-in public 403 diagnostics without suppressing other link errors.
+"""Retry transient external failures and resolve opted-in public 403 diagnostics.
 
 Linkspector 0.5 embeds URL/status in RDJSON messages. Unknown messages remain
 errors. Globalping measurements are public; never submit credentials or queries.
@@ -15,12 +15,13 @@ import argparse
 from dataclasses import asdict, dataclass
 from enum import Enum
 import html
+from http.client import HTTPException
 import json
 import os
 from pathlib import Path
 import re
 import time
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
@@ -29,6 +30,14 @@ API = "https://api.globalping.io/v1/measurements"
 FORBIDDEN = re.compile(r"Cannot reach (https?://\S+) Status: 403(?: .*)?", re.DOTALL)
 HOST = re.compile(r"(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}")
 MAX_URLS = 10
+# Timeouts, rate limits, and server errors from external hosts are retried
+# directly; local files, DNS failures, and other statuses keep Linkspector's result.
+TRANSIENT = re.compile(r"Cannot reach (https?://\S+) Status: (408|429|5\d\d)(?: .*)?", re.DOTALL)
+RETRY_DELAYS = (2, 8, 30)
+RETRY_TIMEOUT = 15
+RETRY_BUDGET = 150
+MAX_RETRY_URLS = 25
+USER_AGENT = "SchmiedmayerLab-link-check/1.0"
 
 
 class Outcome(str, Enum):
@@ -52,7 +61,7 @@ class NoRedirects(HTTPRedirectHandler):
 def request_json(url: str, payload: dict | None = None) -> dict:
     # Only contact the fixed API, never a URL supplied by a report or response.
     request = Request(url, data=json.dumps(payload).encode() if payload is not None else None,
-                      headers={"Content-Type": "application/json", "User-Agent": "SchmiedmayerLab-link-check/1.0"})
+                      headers={"Content-Type": "application/json", "User-Agent": USER_AGENT})
     with build_opener(NoRedirects()).open(request, timeout=10) as response:
         value = json.load(response)
     if not isinstance(value, dict):
@@ -121,6 +130,49 @@ def verify(url: str, hosts: set[str]) -> Finding:
         return Finding(Outcome.UNVERIFIED, "Globalping unavailable or returned invalid results", measurement)
 
 
+def probe(url: str) -> int | None:
+    """Return the final HTTP status of a GET, or None when no response arrived."""
+    try:
+        request = Request(url, headers={"User-Agent": USER_AGENT})
+        with build_opener().open(request, timeout=RETRY_TIMEOUT) as response:
+            return response.status
+    except HTTPError as error:
+        error.close()
+        return error.code
+    except (URLError, HTTPException, OSError, ValueError):
+        return None
+
+
+def retry(urls: list[str]) -> dict[str, Finding]:
+    """Retry each URL with backoff until it answers with a non-transient status."""
+    findings = {url: Finding(Outcome.UNVERIFIED, "Retry limit reached") for url in urls[MAX_RETRY_URLS:]}
+    pending = {url: "" for url in urls[:MAX_RETRY_URLS]}
+    deadline = time.monotonic() + RETRY_BUDGET
+    for delay in RETRY_DELAYS:
+        if not pending or time.monotonic() + delay > deadline:
+            break
+        time.sleep(delay)
+        for url in list(pending):
+            if time.monotonic() > deadline:
+                break
+            code = probe(url)
+            if code is None or code in (408, 429) or code >= 500:
+                pending[url] = "no response" if code is None else f"HTTP {code}"
+                continue
+            del pending[url]
+            if 200 <= code < 300:
+                findings[url] = Finding(Outcome.VERIFIED, f"HTTP {code} on retry")
+            elif code == 403 or code < 400:
+                # A direct request can be blocked or redirected where the browser was not.
+                findings[url] = Finding(Outcome.UNVERIFIED, f"HTTP {code} on retry")
+            else:
+                findings[url] = Finding(Outcome.BROKEN, f"HTTP {code} on retry")
+    for url, last in pending.items():
+        findings[url] = Finding(Outcome.UNVERIFIED, f"Still unavailable on retry ({last})" if last
+                                else "Retry time budget reached")
+    return findings
+
+
 def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
     if not isinstance(report, dict) or not isinstance(report.get("diagnostics"), list):
         raise ValueError("Linkspector did not produce a complete RDJSON report")
@@ -138,6 +190,11 @@ def read_diagnostics(report: dict, exit_code: int) -> list[dict]:
 
 def process(report: dict, exit_code: int, hosts: set[str]) -> dict:
     diagnostics = read_diagnostics(report, exit_code)
+    transient = [(item, match[1]) for item in diagnostics if item["severity"] == "ERROR"
+                 and (match := TRANSIENT.fullmatch(item["message"]))]
+    retries = retry(list(dict.fromkeys(url for _, url in transient))) if transient else {}
+    for item, url in transient:
+        annotate(item, url, retries[url])
     findings: dict[str, Finding] = {}
     for item in diagnostics:
         match = FORBIDDEN.fullmatch(item["message"])
@@ -150,10 +207,14 @@ def process(report: dict, exit_code: int, hosts: set[str]) -> dict:
         if url not in findings:
             findings[url] = (verify(url, hosts) if len(findings) < MAX_URLS else
                              Finding(Outcome.UNVERIFIED, "Fallback limit reached"))
-        finding = findings[url]
-        item["severity"] = {Outcome.VERIFIED: "INFO", Outcome.BROKEN: "ERROR", Outcome.UNVERIFIED: "WARNING"}[finding.outcome]
-        item["message"] = f"{finding.outcome.value}: {url} — {finding.reason}"
-    return {"diagnostics": diagnostics, "fallbacks": {url: asdict(result) for url, result in findings.items()}}
+        annotate(item, url, findings[url])
+    return {"diagnostics": diagnostics, "retries": {url: asdict(result) for url, result in retries.items()},
+            "fallbacks": {url: asdict(result) for url, result in findings.items()}}
+
+
+def annotate(item: dict, url: str, finding: Finding) -> None:
+    item["severity"] = {Outcome.VERIFIED: "INFO", Outcome.BROKEN: "ERROR", Outcome.UNVERIFIED: "WARNING"}[finding.outcome]
+    item["message"] = f"{finding.outcome.value}: {url} — {finding.reason}"
 
 
 def escape_annotation(value: str, *, property_value: bool = False) -> str:
@@ -175,9 +236,14 @@ def emit(result: dict) -> None:
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with open(summary, "a") as file:
+            if result.get("retries"):
+                file.write("### Retried external links\n\n")
+                for url, item in result["retries"].items():
+                    file.write(f"- {Outcome(item['outcome']).value}: <code>{html.escape(url)}</code> — {html.escape(item['reason'])}\n")
+                file.write("\n")
             file.write("### External link verification\n\n")
             for url, item in result["fallbacks"].items():
-                file.write(f"- {item['outcome']}: <code>{html.escape(url)}</code> — {html.escape(item['reason'])}\n")
+                file.write(f"- {Outcome(item['outcome']).value}: <code>{html.escape(url)}</code> — {html.escape(item['reason'])}\n")
                 if item["measurement"]:
                     file.write(f"  [Measurement]({item['measurement']})\n")
             if not result["fallbacks"]:

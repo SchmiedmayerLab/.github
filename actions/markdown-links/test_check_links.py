@@ -9,7 +9,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from contextlib import redirect_stdout
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.error import HTTPError
 
 import check_links as links
@@ -76,10 +76,12 @@ class FallbackTests(unittest.TestCase):
     def test_deduplicates_and_preserves_locations_and_other_errors(self):
         second = diagnostic()
         second["location"]["path"] = "docs/guide.md"
-        report = {"diagnostics": [diagnostic(), second, diagnostic(code=404), diagnostic(code=429)]}
+        report = {"diagnostics": [diagnostic(), second, diagnostic(code=404), diagnostic(code=401)]}
         original = copy.deepcopy(report)
-        with patch.object(links, "verify", return_value=links.Finding(links.Outcome.VERIFIED, "OK")) as verify:
+        with patch.object(links, "verify", return_value=links.Finding(links.Outcome.VERIFIED, "OK")) as verify, \
+                patch.object(links, "retry") as retry:
             result = links.process(report, 1, HOSTS)
+        retry.assert_not_called()
         verify.assert_called_once_with(URL, HOSTS)
         self.assertEqual([item["severity"] for item in result["diagnostics"]], ["INFO", "INFO", "ERROR", "ERROR"])
         self.assertEqual([item["location"] for item in result["diagnostics"]],
@@ -144,6 +146,92 @@ class FallbackTests(unittest.TestCase):
         self.assertEqual(len(output.getvalue().splitlines()), 1)
         self.assertIn("file%2Cunexpected=value", output.getvalue())
         self.assertIn("%0A::warning", output.getvalue())
+
+
+class RetryTests(unittest.TestCase):
+    def setUp(self):
+        self.sleep = patch.object(links.time, "sleep").start()
+        self.addCleanup(patch.stopall)
+
+    def process(self, items, codes):
+        with patch.object(links, "probe", side_effect=codes) as probe:
+            result = links.process({"diagnostics": items}, 1, set())
+        return result, probe
+
+    def test_transient_statuses_are_retried_with_backoff(self):
+        for code in (408, 429, 500, 503):
+            with self.subTest(code=code):
+                self.sleep.reset_mock()
+                result, probe = self.process([diagnostic(code=code)], [503, None, 200])
+                self.assertEqual(probe.call_count, 3)
+                self.assertEqual([call.args[0] for call in self.sleep.call_args_list], list(links.RETRY_DELAYS))
+                self.assertEqual(result["diagnostics"][0]["severity"], "INFO")
+                self.assertEqual(result["retries"][URL]["outcome"], links.Outcome.VERIFIED)
+                self.assertEqual(result["diagnostics"][0]["location"], diagnostic()["location"])
+
+    def test_retry_outcomes(self):
+        cases = [([200], "INFO"), ([404], "ERROR"), ([410], "ERROR"), ([400], "ERROR"), ([401], "ERROR"),
+                 ([403], "WARNING"), ([301], "WARNING"), ([503, 503, 503], "WARNING"),
+                 ([None, None, None], "WARNING"), ([429, 408, 502], "WARNING")]
+        for codes, severity in cases:
+            with self.subTest(codes=codes):
+                result, probe = self.process([diagnostic(code=503)], codes)
+                self.assertEqual(probe.call_count, len(codes))
+                self.assertEqual(result["diagnostics"][0]["severity"], severity)
+
+    def test_only_transient_external_errors_are_retried(self):
+        items = [diagnostic(code=404), diagnostic(code=401), diagnostic(code=403),
+                 {"severity": "ERROR", "message": f"Cannot reach {URL} Status: null net::ERR_NAME_NOT_RESOLVED"},
+                 {"severity": "ERROR", "message": "Cannot reach docs/missing.md Status: 503"},
+                 {"severity": "ERROR", "message": f"Cannot reach {URL} Status: 5030"},
+                 {"severity": "WARNING", "message": f"Cannot reach {URL} Status: 503"}]
+        result, probe = self.process(copy.deepcopy(items), [])
+        probe.assert_not_called()
+        self.assertEqual(result["diagnostics"], items)
+        self.assertEqual(result["retries"], {})
+
+    def test_deduplicates_and_bounds_retries(self):
+        items = [diagnostic(code=503), diagnostic(code=429)] + [diagnostic(f"{URL}{index}", 503)
+                                                         for index in range(links.MAX_RETRY_URLS)]
+        result, probe = self.process(items, lambda url: 200)
+        self.assertEqual(probe.call_count, links.MAX_RETRY_URLS)
+        self.assertEqual(result["retries"][f"{URL}{links.MAX_RETRY_URLS - 1}"]["reason"], "Retry limit reached")
+        self.assertEqual([item["severity"] for item in result["diagnostics"]],
+                         ["INFO"] * (links.MAX_RETRY_URLS + 1) + ["WARNING"])
+
+    def test_time_budget_is_bounded(self):
+        clock = iter([0, 0])
+        with patch.object(links.time, "monotonic", side_effect=lambda: next(clock, links.RETRY_BUDGET + 1)):
+            result, probe = self.process([diagnostic(code=503)], [])
+        probe.assert_not_called()
+        self.assertEqual(result["diagnostics"][0]["severity"], "WARNING")
+        self.assertEqual(result["retries"][URL]["reason"], "Retry time budget reached")
+
+    def test_summary_lists_retried_links(self):
+        result, _ = self.process([diagnostic(code=503), diagnostic(URL + "x", 503)], [200, 503, 503, 503])
+        self.assertEqual(result["retries"][URL + "x"]["reason"], "Still unavailable on retry (HTTP 503)")
+        with tempfile.TemporaryDirectory() as temporary:
+            summary = Path(temporary) / "summary.md"
+            with redirect_stdout(io.StringIO()), patch.dict(links.os.environ, {"GITHUB_STEP_SUMMARY": str(summary)}):
+                links.emit(result)
+            text = summary.read_text()
+        self.assertIn("### Retried external links", text)
+        self.assertIn(f"- verified: <code>{URL}</code>", text)
+        self.assertIn(f"- unverified: <code>{URL}x</code>", text)
+
+    def test_probe_reports_final_status_or_none(self):
+        response = MagicMock(status=200)
+        response.__enter__.return_value = response
+        for effect, expected in [(None, 200), (HTTPError(URL, 503, "Unavailable", {}, None), 503),
+                                 (links.URLError("Name or service not known"), None), (TimeoutError(), None),
+                                 (links.HTTPException(), None)]:
+            with self.subTest(expected=expected), patch.object(links, "build_opener") as opener:
+                opener.return_value.open.side_effect = effect
+                opener.return_value.open.return_value = response
+                self.assertEqual(links.probe(URL), expected)
+                request = opener.return_value.open.call_args.args[0]
+                self.assertEqual(request.get_method(), "GET")
+                self.assertNotIn("Authorization", request.headers)
 
 
 class LiveRegressionTests(unittest.TestCase):
